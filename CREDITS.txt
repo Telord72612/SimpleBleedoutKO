@@ -1,0 +1,24 @@
+SimpleBleedoutKO - credits
+==========================
+
+SimpleBleedoutKO by Telord (https://github.com/Telord72612).
+
+TEXTURES THAT ARE NOT OURS
+- The wrist and ankle bands in Textures/Actors/Character/Overlays/SimpleBleedoutKO/ (Wrist_Strangled_F/M, Ankle_Strangled_F/M) are
+  reshaped from the "Bruise - Strangled" neck mark of "Battle Wounds" by AltNameByeee (LoversLab,
+  https://www.loverslab.com/topic/154719-battle-wounds/ - its textures install as "Collygon - Wounds"). Included with the
+  author's permission on credit ("As long as proper credit is given, I don't mind at all."). These textures are not covered
+  by SimpleBleedoutKO's own licence.
+- Battle Wounds itself is NOT included: it is a requirement for the skin marks. Thank you, AltNameByeee.
+
+IDEAS AND MODS WE WORK WITH
+- "Knockout - Health and Stealth-Based KOs" (Nexus Mods, Skyrim SE mod 133432): the ragdoll knock-out technique and the
+  bash / sneak / low-health knock-out rules that SimpleBleedoutKO's own code follows.
+- Injury Engine by GoodProvider (https://github.com/GoodProvider/Injury_Engine, MIT): its wounds drive the skin marks.
+- SkyrimNet (https://github.com/MinLL/SkyrimNet-GamePlugin): the AI layer the prompt pack talks to.
+- PLANCK by FlyingParticle: the hit-bone reading for the head-only rule in Skyrim VR.
+- RaceMenu by expired6978 (and RaceMenu VR): the overlay painting.
+
+CODE LIBRARIES
+- CommonLibSSE / CommonLibVR (MinLL fork 4.39.5, MIT), nlohmann/json (MIT), spdlog (MIT), {fmt} (MIT), rapidcsv (BSD-3-Clause),
+  DirectXTK / DirectXMath (MIT), OpenVR headers (BSD-3-Clause). Full notices: THIRD_PARTY_NOTICES.txt beside this file.

@@ -1,0 +1,34 @@
+{#
+  SimpleBleedoutKO - what the people AROUND a knocked-out NPC can see.
+
+  Every awake NPC speaker is told about a nearby NPC that SimpleBleedoutKO holds knocked out, with how it looks (injuries, the
+  Sleep spell or a choke), from this mod's own prompt layer - no SkyrimNet file is edited.
+
+  STATE: the rank of SBKO_StateFaction (SimpleBleedoutKO_001.esp 0x803) >= 10 on a NEARBY NPC (get_nearby_npc_list of the
+  speaker, the same list SkyrimNet's scene context uses). Skipped when the speaker is the player or is knocked out too. The
+  knocked-out NPC is never in her own nearby list.
+
+  SBKO_SleepFaction (SimpleBleedoutKO_001.esp 0x80A) rank: 1 or 2 = put down by the Sleep spell (the onlooker sees a very deep
+  sleep, no injuries); 3 = choked until she passed out (red marks around the throat); otherwise = knocked out by her injuries.
+
+  WORDING: what an observer SEES, never what she feels.
+#}
+{% if exists("npc") and existsIn(npc, "UUID") and not is_player(npc.UUID) and get_faction_rank(npc.UUID, "SBKO_StateFaction") < 10 %}
+{% set _near = get_nearby_npc_list(npc.UUID) %}
+{% set _any = false %}
+{% for _n in _near %}{% if get_faction_rank(_n.UUID, "SBKO_StateFaction") >= 10 %}{% set _any = true %}{% endif %}{% endfor %}
+{% if _any %}
+**KNOCKED OUT NEARBY.** In plain view of {{ decnpc(npc.UUID).name }}:
+{% for _n in _near %}{% if get_faction_rank(_n.UUID, "SBKO_StateFaction") >= 10 %}
+{% set _sm = get_faction_rank(_n.UUID, "SBKO_SleepFaction") %}
+{% if _sm == 3 %}
+- {{ decnpc(_n.UUID).name }} lies unconscious on the ground, {{ units_to_meters(_n.distance) }} meters away, choked until {% if decnpc(_n.UUID).isFemale %}she{% else %}he{% endif %} passed out: limp and senseless, red marks around {% if decnpc(_n.UUID).isFemale %}her{% else %}his{% endif %} throat, breathing raggedly but out cold, and {% if decnpc(_n.UUID).isFemale %}she{% else %}he{% endif %} stays that way until {% if decnpc(_n.UUID).isFemale %}she{% else %}he{% endif %} is healed or enough time has passed.
+{% else if _sm == 1 or _sm == 2 %}
+- {{ decnpc(_n.UUID).name }} lies on the ground, {{ units_to_meters(_n.distance) }} meters away, limp and still, as if in a very deep sleep: breathing slowly and evenly, out cold, and {% if decnpc(_n.UUID).isFemale %}she{% else %}he{% endif %} stays that way until {% if decnpc(_n.UUID).isFemale %}she{% else %}he{% endif %} is healed or enough time has passed.
+{% else %}
+- {{ decnpc(_n.UUID).name }} lies unconscious on the ground, {{ units_to_meters(_n.distance) }} meters away. {% if decnpc(_n.UUID).isFemale %}Her{% else %}His{% endif %} injuries knocked {% if decnpc(_n.UUID).isFemale %}her{% else %}him{% endif %} out; {% if decnpc(_n.UUID).isFemale %}she{% else %}he{% endif %} is limp and senseless, breathing but out cold, and stays that way until {% if decnpc(_n.UUID).isFemale %}her{% else %}his{% endif %} wounds are healed or enough time has passed.
+{% endif %}
+{% endif %}{% endfor %}
+What {{ decnpc(npc.UUID).name }} makes of it, and does about it, follows from who {{ decnpc(npc.UUID).name }} is.
+{% endif %}
+{% endif %}

@@ -1,0 +1,190 @@
+// SimpleBleedoutKO 2.0.0 - THE SKIN-MARK TABLE: which Battle Wounds mark shows for which Injury Engine wound.
+// Read ONCE when the game starts. Comments (//) are allowed. A row with a mistake is skipped with one log line.
+//
+// "files": a mark code -> its area (Face / Body / Hands / Feet), its default tint, and its textures relative to Data/Textures:
+//          "U": [female, male] for one file, or "L": [female, male] + "R": [female, male] for a left / right pair (her own side).
+//          Battle Wounds (its "Collygon - Wounds" folder) is installed by the player - it is not part of this mod. SlaveTats paths
+//          get a leading backslash when painted, so SlaveTats never claims or blanks SBKO's slots. Every file is checked at start
+//          (present, square, a power of two - a texture that is not is refused, as a wrong size can crash the game).
+// "families": a look -> for each body part ("face", "back", "arm", "leg") the marks it shows, in order:
+//          "code" (one) or "pick" (her stable pick among several - it never jumps between reads), "at" = the lowest IE stage it
+//          shows at (light by default), "side": "other" = the other side, "tint" = override, "blood": true = one step lighter.
+//          Face: the 1st entry = the base mark, the 2nd / 3rd = layers at medium / severe (bFaceLayers). Body: one mark per wounded
+//          part, the worst parts first (Body 3-5 = three). Hands / Feet = SBKO's own wrist / ankle band (bWristAnkleBands).
+// "sources": an Injury Engine source id -> its family (one, or one per stage light / medium / severe); "" = no art (unmarked);
+//          "standin" = used only with bStandIns=1; "real": false = a torture wound (a real wound wins a tie on a part).
+// Strength: light 0.50, medium 0.75, severe 1.00, floor 0.30 (sStageAlphas / fAlphaFloor / fAlphaScale in SimpleBleedoutKO.ini).
+{
+  "version": 1,
+  "tints": { "C": "5A6EC8", "R": "FFFFFF", "K": "3C3028", "V": "8C78D0" },
+
+  "files": {
+    "F1":  { "area": "Face", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Left Cheek (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Left Cheek.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Right Cheek (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Right Cheek.dds"] },
+    "F2":  { "area": "Face", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Left Lip (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Left Lip.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Right Lip (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Right Lip.dds"] },
+    "F3":  { "area": "Face", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruised Left Eye (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruised Left Eye.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruised Right Eye (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruised Right Eye.dds"] },
+    "F4":  { "area": "Face", "tint": "R",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Cut - Left Cheek (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Cut - Left Cheek.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Cut - Right Cheek (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Cut - Right Cheek.dds"] },
+    "F5":  { "area": "Face", "tint": "R",
+             "U": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Minor Lip Wound (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Minor Lip Wound.dds"] },
+    "F7":  { "area": "Face", "tint": "R",
+             "U": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Minor Nose Wound (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Minor Nose Wound.dds"] },
+    "F8":  { "area": "Face", "tint": "R",
+             "U": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Major Nose Wound (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Major Nose Wound.dds"] },
+    "F9":  { "area": "Face", "tint": "R",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bleeding Left Eye - No Bruise (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bleeding Left Eye - No Bruise.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bleeding Right Eye - No Bruise (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bleeding Right Eye - No Bruise.dds"] },
+    "F11": { "area": "Face", "tint": "R",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Left Splatter (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Left Splatter.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Right Splatter (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Right Splatter.dds"] },
+
+    "B1":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Upper Back (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Upper Back.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Upper Back (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Upper Back.dds"] },
+    "B2":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Middle Back (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Middle Back.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Middle Back (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Middle Back.dds"] },
+    "B3":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Lower Back (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Lower Back.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Lower Back (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Lower Back.dds"] },
+    "B4":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Shoulder (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Shoulder.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Shoulder (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Shoulder.dds"] },
+    "B5":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Armpit (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Armpit.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Armpit (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Armpit.dds"] },
+    "B6":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Chest (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Chest.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Chest (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Chest.dds"] },
+    "B7":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Stomach (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Stomach.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Stomach (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Stomach.dds"] },
+    "B8":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Spank (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Spank.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Spank (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Spank.dds"] },
+    "B9":  { "area": "Body", "tint": "C",
+             "U": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Two Hands Spank (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Two Hands Spank.dds"] },
+    "B10": { "area": "Body", "tint": "R",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Left Chest (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Left Chest.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Right Chest (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Right Chest.dds"] },
+    "A1":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Upper Arm (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Upper Arm.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Upper Arm (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Upper Arm.dds"] },
+    "A2":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Forearm (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Forearm.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Forearm (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Forearm.dds"] },
+    "A3":  { "area": "Body", "tint": "R",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Left Arm (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Left Arm.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Right Arm (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Right Arm.dds"] },
+    "L1":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Upper Leg (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Upper Leg.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Upper Leg (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Upper Leg.dds"] },
+    "L2":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Inner Leg (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Inner Leg.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Inner Leg (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Inner Leg.dds"] },
+    "L3":  { "area": "Body", "tint": "C",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Outer Leg (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Left Outer Leg.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Outer Leg (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Body - Right Outer Leg.dds"] },
+    "L4":  { "area": "Body", "tint": "R",
+             "L": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Left Leg (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Left Leg.dds"],
+             "R": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Right Leg (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Body\\Cut - Body Right Leg.dds"] },
+
+    // SimpleBleedoutKO's own wrist / ankle bands (reshaped from Battle Wounds' "Bruise - Strangled", included with the author's
+    // permission on credit - see CREDITS.txt; shipped with this mod)
+    "WRIST": { "area": "Hands", "tint": "C",
+               "U": ["Actors\\Character\\Overlays\\SimpleBleedoutKO\\Wrist_Strangled_F.dds", "Actors\\Character\\Overlays\\SimpleBleedoutKO\\Wrist_Strangled_M.dds"] },
+    "ANKLE": { "area": "Feet", "tint": "C",
+               "U": ["Actors\\Character\\Overlays\\SimpleBleedoutKO\\Ankle_Strangled_F.dds", "Actors\\Character\\Overlays\\SimpleBleedoutKO\\Ankle_Strangled_M.dds"] },
+
+    // the choke hand mark (only with bChokeMark=1): Battle Wounds' "Choked Two Hands" + its Faded version - Face [Ovl16]
+    "N1":  { "area": "Face", "tint": "C",
+             "U": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Choked Two Hands (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Choked Two Hands.dds"] },
+    "N1F": { "area": "Face", "tint": "C",
+             "U": ["Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Choked Two Hands Faded (F).dds", "Actors\\Character\\slavetats\\Collygon - Wounds\\Face\\Bruise - Choked Two Hands Faded.dds"] }
+  },
+
+  "choke": { "mark": "N1", "faded": "N1F", "tint": "C" },
+
+  "families": {
+    // Blunt bruise (bludgeoning, punching, falling, generic at light): cheek -> + one eye -> + nose blood
+    "bruise": { "tint": "C",
+      "face": [ { "code": "F1" }, { "code": "F3", "at": "medium" }, { "code": "F8", "at": "severe", "blood": true } ],
+      "back": [ { "pick": ["B6", "B7", "B2", "B3"] } ],
+      "arm":  [ { "pick": ["A1", "A2"] } ],
+      "leg":  [ { "pick": ["L1", "L3"] } ] },
+    // a fall: the bruise + the wrist / ankle band
+    "fall": { "tint": "C",
+      "face": [ { "code": "F1" }, { "code": "F3", "at": "medium" }, { "code": "F8", "at": "severe", "blood": true } ],
+      "back": [ { "pick": ["B3", "B6"] } ],
+      "arm":  [ { "code": "WRIST" }, { "pick": ["A1", "A2"] } ],
+      "leg":  [ { "code": "ANKLE" }, { "pick": ["L1", "L3"] } ] },
+    // Blade cut (slashing; piercing and mauling as stand-ins; generic at medium / severe): cheek cut -> + splatter -> + eye blood
+    "cut": { "tint": "R",
+      "face": [ { "code": "F4" }, { "code": "F11", "at": "medium", "blood": true }, { "code": "F9", "at": "severe", "blood": true } ],
+      "back": [ { "pick": ["B10"] } ],
+      "arm":  [ { "pick": ["A3"] } ],
+      "leg":  [ { "pick": ["L4"] } ] },
+    // Hand marks - slapping: a cheek -> + the other cheek -> + lip blood; spanks on the back
+    "slap": { "tint": "C",
+      "face": [ { "code": "F1" }, { "code": "F1", "side": "other", "at": "medium" }, { "code": "F5", "at": "severe", "blood": true } ],
+      "back": [ { "pick": ["B8", "B9"] } ],
+      "arm":  [ { "pick": ["A1"] } ],
+      "leg":  [ { "pick": ["L1"] } ] },
+    // Hand marks - pinching: as the slap's face; sides / ribs; the inner leg
+    "pinch": { "tint": "C",
+      "face": [ { "code": "F1" }, { "code": "F1", "side": "other", "at": "medium" }, { "code": "F5", "at": "severe", "blood": true } ],
+      "back": [ { "pick": ["B5", "B7"] } ],
+      "arm":  [ { "pick": ["A1"] } ],
+      "leg":  [ { "pick": ["L2"] } ] },
+    // Grip (pulling): the wrist / ankle band; + the upper arm at medium; shoulder / armpit on the back. The face (scalp, ears): no art
+    "grip": { "tint": "C",
+      "back": [ { "pick": ["B4", "B5"] } ],
+      "arm":  [ { "code": "WRIST" }, { "pick": ["A1"], "at": "medium" } ],
+      "leg":  [ { "code": "ANKLE" } ] },
+    // Whip welts (whipping): no stripe art - a cheek cut; back bruises from medium (light: IE's own lash decal)
+    "whip": { "tint": "R",
+      "face": [ { "code": "F4" } ],
+      "back": [ { "pick": ["B1", "B2", "B3"], "at": "medium" } ],
+      "arm":  [ { "pick": ["A1", "A2"] } ],
+      "leg":  [ { "pick": ["L1", "L3"] } ] },
+    // bStandIns=1 only: a severe burn = a near-black bruise; frostbite medium / severe = a violet bruise
+    "burn": { "tint": "K",
+      "face": [ { "code": "F1" } ],
+      "back": [ { "pick": ["B6", "B7", "B2", "B3"] } ],
+      "arm":  [ { "pick": ["A1"] } ],
+      "leg":  [ { "pick": ["L1"] } ] },
+    "frost": { "tint": "V",
+      "face": [ { "code": "F1" }, { "code": "F3", "at": "severe" } ],
+      "back": [ { "pick": ["B1", "B2", "B3"] } ],
+      "arm":  [ { "pick": ["A1"] } ],
+      "leg":  [ { "pick": ["L1"] } ] }
+  },
+
+  "sources": {
+    "bludgeoning":  { "family": "bruise", "real": true },
+    "punching":     { "family": "bruise", "real": false },
+    "falling_real": { "family": "fall",   "real": true },
+    "falling":      { "family": "fall",   "real": false },
+    "generic":      { "family": ["bruise", "cut", "cut"], "real": true },
+    "slashing":     { "family": "cut",    "real": true },
+    "piercing":     { "family": "cut",    "real": true },
+    "mauling":      { "family": "cut",    "real": true },
+    "slapping":     { "family": "slap",   "real": false },
+    "pinching":     { "family": "pinch",  "real": false },
+    "pulling":      { "family": "grip",   "real": false },
+    "whipping":     { "family": "whip",   "real": false },
+    "burning":      { "family": "", "standin": ["", "", "burn"],      "real": true },
+    "fire":         { "family": "", "standin": ["", "", "burn"],      "real": false },
+    "freezing":     { "family": "", "standin": ["", "frost", "frost"], "real": true },
+    "frost":        { "family": "", "standin": ["", "frost", "frost"], "real": false },
+    "shocking":     { "family": "", "real": true },
+    "shock":        { "family": "", "real": false },
+    "drowning":     { "family": "", "real": true }
+  }
+}

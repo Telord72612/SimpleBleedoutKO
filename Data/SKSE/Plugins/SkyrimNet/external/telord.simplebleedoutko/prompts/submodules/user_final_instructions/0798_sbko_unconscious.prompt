@@ -1,0 +1,54 @@
+{#
+  SimpleBleedoutKO - she is KNOCKED OUT.
+
+  STATE: rank 10 of SBKO_StateFaction (SimpleBleedoutKO_001.esp 0x803), set by SimpleBleedoutKO.dll the moment she is knocked
+  out; SkyrimNet's get_faction_rank reads the actor live at every render.
+  Numbered 0798 so that it renders late: an unconscious NPC's last instruction is this one. The two sentences about her wounds
+  keep the unconscious reading against wound prompts that render earlier (Injury Engine's).
+
+  SBKO_SleepFaction (SimpleBleedoutKO_001.esp 0x80A): 1 or 2 = the Sleep spell put her down (a deep, magical sleep; in thoughts
+  mode a seen cast leaves "a hand, a soft glow" as a fragment); 3 = choked until she passed out; otherwise = knocked out by her
+  injuries. Every line she gives while out is the sound of an unconscious body.
+
+  WORDING: say what her output IS, never list what it must avoid; stay neutral - no implied emotion.
+#}
+{% if exists("npc") and existsIn(npc, "UUID") and get_faction_rank(npc.UUID, "SBKO_StateFaction") >= 10 %}
+{% set _p = "he" %}{% set _pp = "his" %}{% set _po = "him" %}
+{% if decnpc(npc.UUID).isFemale %}{% set _p = "she" %}{% set _pp = "her" %}{% set _po = "her" %}{% endif %}
+{% set _s = get_faction_rank(npc.UUID, "SBKO_SleepFaction") %}
+{% if _s == 3 %}
+{% if render_mode == "thoughts" %}
+**CHOKED UNCONSCIOUS — {{ decnpc(npc.UUID).name }} IS OUT COLD.** {{ _p | capitalize }} was choked until {{ _p }} passed out, and lies limp and senseless on the ground. {{ _pp | capitalize }} mind is dark. Whatever surfaces is a drifting fragment at most: a hand at the throat, the fight for air, a half-formed image that sinks again before it becomes a thought.
+{% else %}
+**CHOKED UNCONSCIOUS — {{ decnpc(npc.UUID).name }} IS OUT COLD.** {{ _p | capitalize }} was choked until {{ _p }} passed out, and lies limp and senseless on the ground. {{ _p | capitalize }} is completely out: voices, touch and noise around {{ _po }} pass by unheard and unfelt.
+
+EVERY line {{ _p }} gives while out is the sound of an unconscious body: slow, rasping breathing, a faint groan, a wordless murmur. Silence is the most natural answer of all.
+
+Whatever {{ _pp }} wounds are, right now they reach {{ _po }} only as slow breathing and an occasional groan; {{ _pp }} tone, posture and movement are those of someone out cold. The same faint sound, or silence, is the right answer every time.
+
+{{ _p | capitalize }} stays out until healing magic or a potion reaches {{ _po }}, or until {{ _pp }} body has rested long enough to bring {{ _po }} round.
+{% endif %}
+{% else if _s == 1 or _s == 2 %}
+{% if render_mode == "thoughts" %}
+**ASLEEP — {{ decnpc(npc.UUID).name }} IS IN A DEEP, MAGICAL SLEEP.** {{ _p | capitalize }} lies limp and senseless on the ground. {{ _pp | capitalize }} mind is dark. Whatever surfaces is a drifting fragment at most: {% if _s == 2 %}a hand, a soft glow, {% else %}a sensation, {% endif %}a half-formed image that sinks again before it becomes a thought.
+{% else %}
+**ASLEEP — {{ decnpc(npc.UUID).name }} IS IN A DEEP, MAGICAL SLEEP.** {{ _p | capitalize }} lies limp and senseless on the ground. {{ _p | capitalize }} is completely out: voices, touch and noise around {{ _po }} pass by unheard and unfelt.
+
+EVERY line {{ _p }} gives while out is the sound of a body in deep sleep: slow, heavy breathing, a faint groan, a wordless murmur. Silence is the most natural answer of all.
+
+Whatever {{ _pp }} wounds are, right now they reach {{ _po }} only as slow breathing and an occasional groan; {{ _pp }} tone, posture and movement are those of someone out cold. The same faint sound, or silence, is the right answer every time.
+
+{{ _p | capitalize }} sleeps on until healing magic or a potion reaches {{ _po }}, or until {{ _pp }} body has slept long enough to bring {{ _po }} round.
+{% endif %}
+{% else if render_mode == "thoughts" %}
+**UNCONSCIOUS — {{ decnpc(npc.UUID).name }} IS KNOCKED OUT.** {{ _pp | capitalize }} injuries dropped {{ _po }}, and {{ _p }} lies senseless on the ground. {{ _pp | capitalize }} mind is dark. Whatever surfaces is a drifting fragment at most: a sensation, a blur of the fight, a half-formed image that sinks again before it becomes a thought.
+{% else %}
+**UNCONSCIOUS — {{ decnpc(npc.UUID).name }} IS KNOCKED OUT.** {{ _pp | capitalize }} injuries beat {{ _po }} down, and {{ _p }} lies limp and senseless on the ground. {{ _p | capitalize }} is completely out: voices, touch and noise around {{ _po }} pass by unheard and unfelt.
+
+EVERY line {{ _p }} gives while out is the sound of an unconscious body: slow, heavy breathing, a faint groan, a wordless murmur. Silence is the most natural answer of all.
+
+Whatever {{ _pp }} wounds are, right now they reach {{ _po }} only as slow breathing and an occasional groan; {{ _pp }} tone, posture and movement are those of someone out cold. The same faint sound, or silence, is the right answer every time.
+
+{{ _p | capitalize }} stays out until {{ _pp }} wounds are healed, or until {{ _pp }} body has rested long enough to bring {{ _po }} round.
+{% endif %}
+{% endif %}

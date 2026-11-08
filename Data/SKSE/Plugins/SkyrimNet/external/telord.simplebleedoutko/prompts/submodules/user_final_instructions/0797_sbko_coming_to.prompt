@@ -1,0 +1,89 @@
+{#
+  SimpleBleedoutKO - she is COMING TO, confused at first.
+
+  STATE: the rank of SBKO_StateFaction (SimpleBleedoutKO_001.esp 0x803). When she wakes, SimpleBleedoutKO.dll sets rank 3,
+  then steps it 3 -> 2 -> 1 -> 0, one step per fStageSeconds (60 s of play by default; menus pause it). Rank 10 (still out)
+  belongs to 0798, so the two blocks never render together.
+
+  SBKO_SleepFaction (SimpleBleedoutKO_001.esp 0x80A), written at every knock-out:
+    3 = choked unconscious (handed over by VRTouchEvents' choke): a vague memory of the player's hand around her throat and
+        everything going black, coming back in pieces;
+    2 = the Sleep spell, and she saw the caster: she half-remembers the caster's hand and a magical glow, unsure whether it
+        was a dream;
+    1 = the Sleep spell, not seen: she simply wakes up confused;
+    0 / not a member = any other knock-out (her injuries).
+  It is read only inside the rank gate below, so a left-over mark on an awake NPC does nothing.
+
+  The SPEECH sentences are left out while she wears a gag (Devious Devices, ZaZ or Diary of Mine gag keywords) and in
+  thoughts mode; the confusion itself is told either way.
+  Names for the player, never pronouns (the player's pronouns are not known); a sentence that names the player names her too.
+  WORDING: say what she is and does, and stay neutral - her feelings about it are hers to play.
+#}
+{% if exists("npc") and existsIn(npc, "UUID") %}
+{% set _r = get_faction_rank(npc.UUID, "SBKO_StateFaction") %}
+{% if _r >= 1 and _r <= 3 %}
+{% set _p = "he" %}{% set _pp = "his" %}{% set _po = "him" %}
+{% if decnpc(npc.UUID).isFemale %}{% set _p = "she" %}{% set _pp = "her" %}{% set _po = "her" %}{% endif %}
+{% set _talk = render_mode != "thoughts" and not worn_has_keyword(npc.UUID, "zad_DeviousGag") and not worn_has_keyword(npc.UUID, "zbfWornGag") and not worn_has_keyword(npc.UUID, "DOMWornGag") %}
+{% set _s = get_faction_rank(npc.UUID, "SBKO_SleepFaction") %}
+{% set _n = decnpc(npc.UUID).name %}
+{% set _pc = "a stranger" %}{% if exists("player") and existsIn(player, "UUID") %}{% set _pc = decnpc(player.UUID).name %}{% endif %}
+{% if _s == 3 %}
+{% if _r == 3 %}
+**COMING TO — {{ _n }} WAS CHOKED UNCONSCIOUS.** {{ _n }} is only just coming round and is confused: {{ _pp }} throat is raw and sore, every breath scrapes, and {{ _pp }} head pounds. What happened is a blur — the last thing {{ _n }} remembers, vaguely, is {{ _pc }}'s hand around {{ _n }}'s throat, and then everything going black. {{ _p | capitalize }} does not know how long {{ _p }} was out, or how {{ _p }} came to be lying here.
+{% if _talk %}
+
+Write {{ _pp }} speech hoarse, halting and muddled: short broken phrases, a cough between words, a question about what happened.
+{% endif %}
+{% else if _r == 2 %}
+**STILL GROGGY — {{ _n }} IS CLEARING.** The fog is lifting. {{ _p | capitalize }} recognises where {{ _p }} is and who is with {{ _po }}. {{ _pp | capitalize }} throat still aches and swallowing hurts. The memory comes back in pieces, still vague: {{ _pc }}'s hand around {{ _n }}'s throat, the fight for air, everything going black.{% if _talk %} {{ _pp | capitalize }} voice is rough and {{ _p }} loses the thread now and then.{% endif %}
+{% else %}
+**ALMOST CLEAR — {{ _n }} HAS COME ROUND.** {{ _p | capitalize }} is lucid again. {{ _pp | capitalize }} throat is sore, and the time {{ _p }} was out is a gap in {{ _pp }} memory. {{ _n }} knows {{ _pc }} choked {{ _n }} unconscious: the memory is vague — a hand around {{ _n }}'s throat, then everything went black.{% if _talk %} {{ _p | capitalize }} speaks in full sentences again, {{ _pp }} voice still a little hoarse.{% endif %}
+{% endif %}
+
+What {{ _n }} makes of it, and of {{ _pc }}, is {{ _n }}'s own to play.
+{% else if _s == 2 %}
+{% if _r == 3 %}
+**COMING TO — {{ _n }} IS WAKING FROM A DEEP, MAGICAL SLEEP.** The last thing {{ _n }} remembers is {{ _pc }} putting a hand on {{ _n }}, a magical glow around {{ _pc }}'s finger — and now {{ _n }} is waking up. {{ _p | capitalize }} is confused: {{ _pp }} head is heavy and slow, and {{ _pp }} eyes are slow to focus. {{ _n }} is not sure whether seeing {{ _pc }} was real at all, or only a dream. {{ _p | capitalize }} does not know how long {{ _p }} slept, or how {{ _p }} came to be lying here.
+{% if _talk %}
+
+Write {{ _pp }} speech slow, halting and muddled: short broken phrases, a word that comes out wrong, a question about what happened.
+{% endif %}
+{% else if _r == 2 %}
+**STILL GROGGY — {{ _n }} IS CLEARING.** The heavy sleep is lifting. {{ _p | capitalize }} recognises where {{ _p }} is and who is with {{ _po }}. The picture of {{ _pc }}'s hand on {{ _n }} and the glow around {{ _pc }}'s finger is still there, faint as a dream, and {{ _n }} cannot tell whether it really happened.{% if _talk %} {{ _pp | capitalize }} speech is slower than usual and {{ _p }} loses the thread now and then.{% endif %}
+{% else %}
+**ALMOST CLEAR — {{ _n }} HAS COME ROUND.** {{ _p | capitalize }} is lucid again, only a little heavy-headed. The time {{ _p }} slept is a gap in {{ _pp }} memory; the one picture left from before it is {{ _pc }}'s hand on {{ _n }} and a magical glow around {{ _pc }}'s finger, and {{ _n }} is still unsure whether that was real or a dream.{% if _talk %} {{ _p | capitalize }} speaks in full sentences again, the way {{ _p }} always does.{% endif %}
+{% endif %}
+
+What {{ _n }} makes of it, and of {{ _pc }}, is {{ _n }}'s own to play.
+{% else if _s == 1 %}
+{% if _r == 3 %}
+**COMING TO — {{ _n }} IS WAKING UP.** {{ _n }} has just woken from a deep, heavy sleep and is dazed and confused: {{ _pp }} head is thick and foggy, {{ _pp }} eyes are slow to focus, and {{ _p }} does not remember lying down or falling asleep here. At first {{ _p }} is unsure where {{ _p }} is, how long {{ _p }} slept, and who is around {{ _po }}.
+{% if _talk %}
+
+Write {{ _pp }} speech slow, halting and muddled: short broken phrases, a word that comes out wrong, a question about what happened.
+{% endif %}
+{% else if _r == 2 %}
+**STILL GROGGY — {{ _n }} IS CLEARING.** The heavy sleep is lifting. {{ _p | capitalize }} recognises where {{ _p }} is and who is with {{ _po }}, and is piecing together how {{ _p }} came to fall asleep there.{% if _talk %} {{ _pp | capitalize }} speech is slower than usual and {{ _p }} loses the thread now and then.{% endif %}
+{% else %}
+**ALMOST CLEAR — {{ _n }} HAS COME ROUND.** {{ _p | capitalize }} is lucid again. A dull heaviness remains, and the time {{ _p }} slept is a gap in {{ _pp }} memory.{% if _talk %} {{ _p | capitalize }} speaks in full sentences again, the way {{ _p }} always does.{% endif %}
+{% endif %}
+
+How {{ _p }} feels about having fallen asleep so suddenly is {{ _pp }} own to play.
+{% else %}
+{% if _r == 3 %}
+**COMING TO — {{ decnpc(npc.UUID).name }} HAS JUST REGAINED CONSCIOUSNESS.** {{ _pp | capitalize }} injuries knocked {{ _po }} out, and {{ _p }} has only just woken. {{ _p | capitalize }} is dazed and confused: {{ _pp }} head is thick and foggy, {{ _pp }} eyes are slow to focus, and the last moments before {{ _p }} went down are a blur. At first {{ _p }} is unsure where {{ _p }} is, how long {{ _p }} was out, and who is around {{ _po }}. {{ _pp | capitalize }} body is stiff and aching from the wounds that dropped {{ _po }}, and {{ _p }} moves carefully.
+{% if _talk %}
+
+Write {{ _pp }} speech slow, halting and muddled: short broken phrases, a word that comes out wrong, a question about what happened.
+{% endif %}
+{% else if _r == 2 %}
+**STILL GROGGY — {{ decnpc(npc.UUID).name }} IS CLEARING.** The fog is lifting. {{ _p | capitalize }} recognises where {{ _p }} is and who is with {{ _po }}, and is piecing together what happened before {{ _p }} went down. {{ _pp | capitalize }} head throbs and {{ _pp }} body is sore.{% if _talk %} {{ _pp | capitalize }} speech is slower than usual and {{ _p }} loses the thread now and then.{% endif %}
+{% else %}
+**ALMOST CLEAR — {{ decnpc(npc.UUID).name }} HAS COME ROUND.** {{ _p | capitalize }} is lucid again. A dull headache and some stiffness remain, and the time {{ _p }} was out is a gap in {{ _pp }} memory.{% if _talk %} {{ _p | capitalize }} speaks in full sentences, the way {{ _p }} spoke before the fight.{% endif %}
+{% endif %}
+
+How {{ _p }} feels about having been knocked out is {{ _pp }} own to play.
+{% endif %}
+{% endif %}
+{% endif %}

@@ -1,0 +1,24 @@
+{
+  "id": "telord.simplebleedoutko",
+  "type": "bundle",
+  "title": "SimpleBleedoutKO - Knockout Awareness",
+  "tagline": "SkyrimNet NPCs know when they are knocked out, and come round confused.",
+  "description": "Tells the SkyrimNet AI when an NPC has been knocked out by SimpleBleedoutKO: while she is down she is unconscious and answers only with the sounds of an unconscious body, and when she wakes she comes round dazed and confused, clearing over about three minutes. Everyone nearby who is awake can see that she is lying unconscious on the ground.\n\nPut to sleep by SimpleBleedoutKO's Sleep spell, she sleeps instead, and wakes confused - and if she saw the caster's glowing hand on her, she half-remembers it, unsure whether it was a dream.\n\nChoked unconscious by the player (VRTouchEvents' choke, taken over by SimpleBleedoutKO), she comes round confused and hoarse, with a vague memory of the player's hand around her throat and everything going black - and nearby onlookers see the marks on her throat.\n\nNeeds the SimpleBleedoutKO mod itself - these prompts read the ranks of its SBKO_StateFaction and SBKO_SleepFaction, which its plugin sets.",
+  "author": "Telord",
+  "tags": [
+    "knockout",
+    "awareness",
+    "npc-state"
+  ],
+  "nsfw": false,
+  "icon": "sparkles",
+  "version": "1.2.1",
+  "min_skyrimnet_version": "0.25.0",
+  "mods": [
+    {
+      "name": "SimpleBleedoutKO",
+      "file": "SimpleBleedoutKO_001.esp",
+      "required": true
+    }
+  ]
+}

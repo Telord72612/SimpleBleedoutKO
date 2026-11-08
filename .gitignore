@@ -1,0 +1,15 @@
+# build output
+/build/
+/_stage/
+/_symbols/
+/out/
+*.pdb
+*.ilk
+*.obj
+# compiled Papyrus (shipped in the release zip)
+*.pex
+# editor / OS
+.vs/
+.vscode/
+*.user
+Thumbs.db
