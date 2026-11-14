@@ -976,6 +976,19 @@ namespace SBKO::Knockout
             return base && (base->IsEssential() || base->IsProtected());
         }
 
+        // 2.1.0 [WhoGetsKnockedOut] (SBKO_Setting.ini): nullptr = her group may be knocked out at bleedout; else why not (her group is
+        // switched off - she keeps the game's own bleedout). A follower is judged as a follower first (whatever her flags), then a
+        // protected / essential NPC, then an ordinary one. Reads only her flags / factions: safe under g_mtx.
+        const char* WhoSwitchedOff(RE::Actor* a_actor, bool a_follower)
+        {
+            const auto& cfg = Settings::Get();
+            if (a_follower)
+                return cfg.koFollowers ? nullptr : "bKnockOutFollowers 0 - a follower keeps the game's own bleedout";
+            if (IsProtectedOrEssential(a_actor))
+                return cfg.koProtected ? nullptr : "bKnockOutProtected 0 - a protected / essential NPC keeps the game's own bleedout";
+            return cfg.koNormal ? nullptr : "bKnockOutNormalNPCs 0 - an ordinary NPC keeps the game's own bleedout";
+        }
+
         // U1: which of Smart NPC Potions' three abilities she has now (mask 1|2|4). Actor::HasSpell = RELOCATION_ID 37828 /
         // 38782 (Actor.cpp:864-869), VR 0x63BBE0 (checked in version-1-4-15-0.csv).
         std::int32_t PotionSpellsOn(RE::Actor* a_actor)
@@ -1842,11 +1855,40 @@ namespace SBKO::Knockout
                          e.who, a_via, a_note, extra);
         }
 
+        // 2.1.0 looting (bLootKnockedOut, while sneaking): the NPC whose inventory SBKO asked to open (pending) and the one whose
+        // inventory menu SBKO opened and is still open (open); 0 = none. Written by the loot task (an SKSE task) / the menu sink (UI
+        // thread), read anywhere - atomics only. Both cleared at kPreLoadGame and at a revert.
+        std::atomic<RE::FormID> g_lootPending{ 0 };
+        std::atomic<RE::FormID> g_lootOpen{ 0 };
+
+        // Task context (TaskRelay -> SKSE task; in VR an engine job thread inside SKSE's task lock, not the main thread). If the open
+        // container menu is SBKO's loot menu of HER, it is hidden; another container now = left alone. No lock of ours.
+        void HideOurLootMenu(RE::FormID a_id, const char* a_why)
+        {
+            if (g_lootOpen.load() != a_id) return;
+            auto* ui = RE::UI::GetSingleton();
+            if (!ui || !ui->IsMenuOpen(RE::ContainerMenu::MENU_NAME)) return;
+            const auto ref = RE::TESObjectREFR::LookupByHandle(RE::ContainerMenu::GetTargetRefHandle());
+            if (!ref || ref->GetFormID() != a_id) return;   // the container menu shows someone else now - not ours
+            if (auto* q = RE::UIMessageQueue::GetSingleton()) q->AddMessage(RE::ContainerMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide, nullptr);
+            logger::info("[loot] 0x{:08X} {} - closing her inventory menu", a_id, a_why);
+        }
+
+        // 2.1.0: she wakes / is let go / dies while SBKO's loot menu of HER is open -> that menu closes. A menu still on its way (asked
+        // for, not open yet) is caught when it opens: the menu sink checks she is still knocked out. Callable with g_mtx held: an atomic
+        // read and a TaskRelay push (TaskRelay's own lock is a leaf). a_why = a string literal.
+        void CloseOurLoot(RE::FormID a_id, const char* a_why)
+        {
+            if (a_id == 0 || g_lootOpen.load() != a_id) return;
+            TaskRelay::Add([a_id, a_why] { HideOurLootMenu(a_id, a_why); });
+        }
+
         // v10 WakeUp (psc:127-156), the C++ half. `a_cppPct` < 0 = health not read. `a_timer` = the game-hour timer woke
         // her (M1c: narrated, `a_hoursOut` game hours out); otherwise the heal check did.
         void BeginWake(Entry& e, RE::FormID a_id, std::string a_reason, float a_cppPct, bool a_timer, std::int32_t a_hoursOut,
                        std::vector<Call>& a_calls)
         {
+            CloseOurLoot(a_id, "wakes up");   // 2.1.0
             e.state        = State::kComingTo;
             e.comingToRank = kRankComingTo;   // psc:145
             e.stageSeconds = 0.0f;            // psc:146
@@ -1868,6 +1910,7 @@ namespace SBKO::Knockout
         void BeginWakeU(Entry& e, RE::FormID a_id, std::string a_reason, float a_cppPct, std::int32_t a_hoursOut,
                         std::vector<Call>& a_calls)
         {
+            CloseOurLoot(a_id, "wakes up");   // 2.1.0
             e.state        = State::kComingTo;
             e.comingToRank = kRankComingTo;
             e.stageSeconds = 0.0f;
@@ -1897,6 +1940,7 @@ namespace SBKO::Knockout
         void BeginStraightWake(Entry& e, RE::FormID a_id, std::string a_reason, float a_cppPct, std::int32_t a_narrate,
                                bool a_clearNoBleedout, std::vector<Call>& a_calls)
         {
+            CloseOurLoot(a_id, "wakes up");   // 2.1.0
             e.state        = State::kComingTo;
             e.comingToRank = kRankComingTo;
             e.stageSeconds = 0.0f;
@@ -1958,6 +2002,7 @@ namespace SBKO::Knockout
         void LetGoNow(Entry& e, RE::FormID a_id, const char* a_why, TakenKind a_kind, std::vector<Call>& a_calls)
         {
             if (e.releasing) return;
+            CloseOurLoot(a_id, "is let go");   // 2.1.0
             const bool clearBleed = true;   // u2c fix 4: SBKO set NoBleedoutRecovery on every hold (the psc clears it on every LetGo too)
             const bool vrte       = a_kind == TakenKind::kVrte;
             const bool clearUnc   = a_kind == TakenKind::kBag;
@@ -2413,6 +2458,15 @@ namespace SBKO::Knockout
             // u6d (F10): a normal NPC whose bleedout is already decided "acting hurt" - nothing more to do or say while she kneels
             // (her ONE [chanceko] line was written when it was decided); no VM ask, no reads
             if (g_u5On.load(std::memory_order_relaxed) && !IsProtectedOrEssential(a) && U5ActingHurtDecided(a->GetFormID())) return;
+            // 2.1.0 [WhoGetsKnockedOut]: her group is switched off and SBKO holds nothing of hers (not watched, no rank 10 / coming-to
+            // rank) - every look below would end at the same gate; said once per bleedout, nothing more is read (no lock of ours held)
+            if (const char* off = WhoSwitchedOff(a, IsFollower(a))) {
+                const std::int32_t r = g_faction ? a->GetFactionRank(g_faction, false) : -1;
+                if (!Watched(a->GetFormID()) && r != kRankDown && !(r >= 1 && r <= kRankComingTo)) {
+                    SayNotKnockedOut(a, a_via, off);
+                    return;
+                }
+            }
             const auto&        cfg   = Settings::Get();
             const RE::FormID   id    = a->GetFormID();
             const std::int32_t rank  = g_faction ? a->GetFactionRank(g_faction, false) : -1;
@@ -2438,7 +2492,7 @@ namespace SBKO::Knockout
             // Essential / protected NPCs: unchanged. bChanceKO 0 (no hook): unchanged for everyone.
             const bool   normalNpc = g_u5On.load(std::memory_order_relaxed) && !IsProtectedOrEssential(a);
             BleedVerdict verdict   = BleedVerdict::kWait;
-            if (normalNpc && !taken && !brawl && !vrte && !Watched(id)) {
+            if (normalNpc && !taken && !brawl && !vrte && !Watched(id) && !WhoSwitchedOff(a, foll)) {   // 2.1.0: no roll for a switched-off group
                 bool skip = false;
                 {
                     std::scoped_lock lk0(g_mtx);
@@ -2550,6 +2604,13 @@ namespace SBKO::Knockout
                 if (std::chrono::duration<float>(nowTp - e.wakeDoneAt).count() < gap) return;
                 if (vrte) return;
                 if (normalNpc && verdict != BleedVerdict::kKnockOut) return;   // u6b (U5): her roll said no / not yet (PickBleedout logged it)
+                // 2.1.0 [WhoGetsKnockedOut]: dropping again while coming to = a NEW automatic knock-out - her group's switch decides (off =
+                // the game's own bleedout; her coming-to goes on as usual)
+                if (const char* off = WhoSwitchedOff(a, foll)) {
+                    if (g_silentLogged.insert(id).second)
+                        logger::info("[KO] {} in bleedout again while coming to (seen by {}) - not knocked out again: {}", e.who, a_via, off);
+                    return;
+                }
                 if (inGrace()) return;   // u2d: the bleedout grace first - every knock-out
                 const std::string note = graceNote(normalNpc ? " - again, while coming to; she won her knock-out roll at the bleedout"
                                                              : " - again, while coming to");
@@ -2564,6 +2625,13 @@ namespace SBKO::Knockout
                 auto& e = AdoptDown(id, std::move(who));
                 logger::info("[KO] {} ADOPTED as DOWN (seen by {}): rank 10 already, no entry = a v10 knockout. HealRate comes back "
                              "from her base value; ~{} game-hrs", e.who, a_via, static_cast<int>(e.recoverHours));
+                return;
+            }
+            // 2.1.0 [WhoGetsKnockedOut]: only a NEW knock-out is asked (an NPC SBKO already holds, one coming to and a rank-10 adoption
+            // were all handled above). Logged once per bleedout (g_silentLogged - under g_mtx here, so not SayNotKnockedOut).
+            if (const char* off = WhoSwitchedOff(a, foll)) {
+                if (g_silentLogged.insert(id).second)
+                    logger::info("[KO] {} in bleedout (seen by {}) - not knocked out: {}", who, a_via, off);
                 return;
             }
             if (normalNpc && verdict != BleedVerdict::kKnockOut) return;   // u6b (U5): her roll said no / not yet (PickBleedout logged it)
@@ -3028,6 +3096,7 @@ namespace SBKO::Knockout
             const bool        deadNow = sbko::IsDeadNow(a);
             const int         life    = (a && a->AsActorState()) ? static_cast<int>(a->AsActorState()->GetLifeState()) : -1;
             if (deadNow) Marks::OnDeath(a_id);   // m34: the marks stay on the body, her marks record goes (no lock of ours held)
+            if (deadNow) CloseOurLoot(a_id, "died");   // 2.1.0: the living-loot menu closes; her corpse is the game's own loot after
             std::string       who;
             State             was = State::kDown;
             std::vector<Call> calls;
@@ -3480,8 +3549,8 @@ namespace SBKO::Knockout
                 why = cr;
             else if (sbko::IsDeadNow(a))
                 why = "dead";
-            else if (bleeding && !u5Normal)
-                why = "bleeding out - SBKO's bleedout knock-out owns that";
+            else if (bleeding && !u5Normal && !WhoSwitchedOff(a, foll))   // 2.1.0: a switched-off group kneels in the game's
+                why = "bleeding out - SBKO's bleedout knock-out owns that"; //   bleedout - your own knock-out still takes her
             else if (cur <= 0.0f)
                 why = "her Health is at or below 0 - the bleedout / death path owns her";
             else if (st && st->IsUnconscious())
@@ -3650,8 +3719,8 @@ namespace SBKO::Knockout
                 why = cr;
             else if (sbko::IsDeadNow(a))
                 why = "dead";
-            else if (bleeding && !u5Normal)
-                why = "bleeding out - SBKO's bleedout knock-out owns that";
+            else if (bleeding && !u5Normal && !WhoSwitchedOff(a, foll))   // 2.1.0: a switched-off group kneels in the game's
+                why = "bleeding out - SBKO's bleedout knock-out owns that"; //   bleedout - your own knock-out still takes her
             else if (cur <= 0.0f)
                 why = "her Health is at or below 0 - the bleedout / death path owns her";
             else if (st && st->IsUnconscious())
@@ -4456,6 +4525,8 @@ namespace SBKO::Knockout
                 why = "her Health is at or below 0 now (death is the game's)";
             else if (!IsNPC(a) || IsGhost(a) || IsProtectedOrEssential(a))
                 why = "not a normal NPC (now)";
+            else if (!cfg.koFollowers && IsFollower(a))   // 2.1.0: a belt - the hook already drops them
+                why = "a follower (bKnockOutFollowers 0)";
             else if (a->IsCommandedActor())   // u6d (F7): a belt - the hook already drops them
                 why = "a summoned / commanded actor";
             else if (const char* cr = ChildOrRider(a))   // u6d fix 2: a belt - the hook already drops them
@@ -4773,6 +4844,7 @@ namespace SBKO::Knockout
         {
             const auto* st = a_this->AsActorState();
             if (sbko::IsDeadNow(a_this) || !IsNPC(a_this) || IsProtectedOrEssential(a_this) || IsGhost(a_this)) return "not a normal NPC";
+            if (!Settings::Get().koFollowers && IsFollower(a_this)) return "a follower (bKnockOutFollowers 0)";   // 2.1.0
             if (a_this->IsCommandedActor()) return "a summoned / commanded actor";   // u6d (F7)
             if (ChildOrRider(a_this)) return "a child, or riding a mount";           // u6d fix 2
             if (st && st->IsUnconscious()) return "unconscious";
@@ -6319,6 +6391,123 @@ namespace SBKO::Knockout
             }
         };
 
+        // 2.1.0 looting - the rules: only while the player SNEAKS (a standing click keeps the old
+        // behaviour: Diary of Mine's Wake / Tie-up, talking), always clean (free looting, never a crime, seen or not), other mods'
+        // interaction menus first. A living, paralysed, ragdolled NPC has no loot / pickpocket action of its own (in VR the engine
+        // opens no menu), so SBKO opens her inventory: SBKO_Helper.LootInventory = OpenInventory(true); the menu sink logs the mode the
+        // engine really used. Diary of Mine's own box choices (Cancel / Tie-up / ...) are perk fragments, not this activation.
+        // The menus that mean "another interaction is on" - SBKO does not open over them. NOT MessageBoxMenu: Diary of Mine's own
+        // "Cancel / Activate" box is the normal way here and may still be closing when this runs.
+        constexpr std::array<std::string_view, 18> kLootYieldMenus{
+            "ContainerMenu", "Dialogue Menu", "BarterMenu", "GiftMenu", "InventoryMenu", "MagicMenu", "Lockpicking Menu", "Book Menu",
+            "Crafting Menu", "Training Menu", "Sleep/Wait Menu", "Console", "Journal Menu", "MapMenu", "StatsMenu", "FavoritesMenu",
+            "TweenMenu", "CustomMenu"
+        };
+        const char* OtherMenuOpen()
+        {
+            auto* ui = RE::UI::GetSingleton();
+            if (!ui) return nullptr;
+            for (const auto m : kLootYieldMenus)
+                if (ui->IsMenuOpen(m)) return m.data();
+            return nullptr;
+        }
+
+        // Task context: what SBKO holds about her, for looting. Lootable = held, alive, STILL knocked out (unconscious / an old DOWN
+        // knock-out) - not entering, coming to or being let go. Takes g_mtx.
+        struct LootLook
+        {
+            bool        held      = false;
+            bool        dead      = false;
+            std::string who;
+            State       state     = State::kDown;
+            bool        releasing = false;
+            [[nodiscard]] bool Lootable() const { return held && !dead && !releasing && (state == State::kUnconscious || state == State::kDown); }
+        };
+        LootLook LookForLoot(RE::Actor* a_a, RE::FormID a_id)
+        {
+            LootLook l;
+            l.dead = !a_a || sbko::IsDeadNow(a_a);
+            std::scoped_lock lk(g_mtx);
+            const auto       it = g_map.find(a_id);
+            if (it == g_map.end()) return l;
+            l.held      = true;
+            l.who       = it->second.who;
+            l.state     = it->second.state;
+            l.releasing = it->second.releasing;
+            return l;
+        }
+
+        // Task context (TaskRelay -> SKSE task; in VR an engine job thread inside SKSE's task lock). Only an NPC SBKO holds STILL knocked
+        // out is looted. No guard against a second click while her menu is on its way: that window is the two or three frames until
+        // the menu opens (then OtherMenuOpen sees it), and a guard would block her for good if a menu ever failed to open.
+        void OnLootTask(RE::FormID a_id, std::uint32_t a_gen)
+        {
+            if (a_gen != g_generation.load() || !g_gameReady.load()) return;
+            auto* a = RE::TESForm::LookupByID<RE::Actor>(a_id);
+            if (!a || sbko::IsDeadNow(a)) return;   // a corpse: the game's own loot menu
+            const LootLook l = LookForLoot(a, a_id);
+            if (!l.held) return;   // SBKO does not hold her: the game's own activation, nothing of ours
+            const std::string& who       = l.who;
+            const State        state     = l.state;
+            const bool         releasing = l.releasing;
+            if (!l.Lootable()) {
+                logger::info("[loot] {} - not looted: she is {} (only a knocked-out NPC lying still can be looted)", who,
+                             releasing ? "being let go" : StateName(state));
+                return;
+            }
+            if (const char* m = OtherMenuOpen()) {
+                logger::info("[loot] {} - not opened: {} is open (another interaction goes first)", who, m);
+                return;
+            }
+            g_lootPending.store(a_id);
+            const bool sent = Helper::LootInventory(a_id);
+            if (!sent) g_lootPending.store(0);
+            logger::info("[loot] {} - you activated her while sneaking and she is {}: {}", who, StateName(state),
+                         sent ? "her inventory opens (free looting, bLootKnockedOut)"
+                              : "her inventory did NOT open - SBKO_Helper.pex has no LootInventory (an older script next to this DLL?)");
+        }
+
+        // ContainerMenu opening / closing (UI thread; every menu passes here - one name compare first). Recognises SBKO's own loot menu
+        // (the pending NPC = the menu's target) and logs the mode the engine used (kNPCMode = clean; kSteal would mean stolen items).
+        // Its task then checks she is STILL knocked out - she may have come to while the menu was on its way (CloseOurLoot found no open
+        // menu then) - and closes it if not. The close of SBKO's menu is logged too: a close right after the open = another mod took
+        // the menu over (VR Backpack turns a sneaking NPC-mode menu on a helpless NPC into its pickpocket panel). No lock of ours, no
+        // AddTask: atomics + TaskRelay pushes.
+        class LootMenuSink final : public RE::BSTEventSink<RE::MenuOpenCloseEvent>
+        {
+        public:
+            RE::BSEventNotifyControl ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override
+            {
+                if (!a_event || a_event->menuName != RE::ContainerMenu::MENU_NAME) return RE::BSEventNotifyControl::kContinue;
+                if (!a_event->opening) {
+                    const RE::FormID was = g_lootOpen.exchange(0);
+                    if (was != 0) TaskRelay::Add([was] { logger::info("[loot] 0x{:08X} - her inventory menu is closed", was); });
+                    return RE::BSEventNotifyControl::kContinue;
+                }
+                const RE::FormID want = g_lootPending.exchange(0);
+                if (want == 0) return RE::BSEventNotifyControl::kContinue;   // a container menu of someone else's making
+                const auto          mode = static_cast<std::uint32_t>(RE::ContainerMenu::GetContainerMode());
+                const auto          ref  = RE::TESObjectREFR::LookupByHandle(RE::ContainerMenu::GetTargetRefHandle());
+                const RE::FormID    got  = ref ? ref->GetFormID() : 0;
+                const std::uint32_t gen  = g_generation.load();
+                if (got == want) g_lootOpen.store(want);
+                TaskRelay::Add([want, got, mode, gen] {
+                    const char* name = mode == 0 ? "loot" : mode == 1 ? "STEAL (items would be stolen)" : mode == 2 ? "pickpocket" : mode == 3 ? "NPC / trade (clean)" : "?";
+                    if (got != want) {
+                        logger::info("[loot] 0x{:08X} - a container menu opened, but for 0x{:08X} (mode {}): not SBKO's loot", want, got, mode);
+                        return;
+                    }
+                    logger::info("[loot] 0x{:08X} - her inventory menu is open: container mode {} = {}", want, mode, name);
+                    if (gen != g_generation.load()) return;
+                    const LootLook l = LookForLoot(RE::TESForm::LookupByID<RE::Actor>(want), want);
+                    if (l.Lootable()) return;
+                    HideOurLootMenu(want, !l.held ? "is no longer held by SBKO" : l.dead ? "died" : l.releasing ? "is being let go" : "came to while her menu was opening");
+                });
+                return RE::BSEventNotifyControl::kContinue;
+            }
+        };
+        LootMenuSink g_lootMenuSink;
+
         // u6f: TESActivateEvent - EVERY activation in the game passes here (doors, containers, NPCs at furniture ...). Only the PLAYER
         // activating an actor goes on: (u6f) one SBKO holds asleep (one set lookup under g_watchMtx; bSleepWakeOnTalk) -> OnSleepWakeTask;
         // u7a (M2) else two field reads - her sit-sleep state, the player's sneaking bit - and a natural sleeper (7 / 8, not sneaking; or
@@ -6336,7 +6525,20 @@ namespace SBKO::Knockout
                 const RE::FormID    tid = obj->GetFormID();
                 const std::uint32_t gen = g_generation.load();
                 const auto&         cfg = Settings::Get();
-                if (g_sleepWatchCount.load(std::memory_order_relaxed) != 0 && g_sleepOn.load(std::memory_order_relaxed) && cfg.sleepWakeOnTalk &&
+                // 2.1.0 looting: the player SNEAKING (Actor::IsSneaking - the sneak bit, not swimming, not mounted) + SBKO holding anyone
+                // (one atomic read) -> the loot task (it checks it is HER, still knocked out); this bypasses only OUR wake branch below -
+                // a crouched loot never wakes her (the probe still logs: a sneaking player never wakes anyone there). kContinue: the
+                // engine and other mods see the activation as always. A standing player goes on below, unchanged.
+                bool looting = false;
+                if (cfg.lootKnockedOut && g_handled.load(std::memory_order_relaxed) != 0) {
+                    const auto* pa = a_event->actionRef.get()->As<RE::Actor>();
+                    if (pa && pa->IsSneaking()) {
+                        TaskRelay::Add([tid, gen] { OnLootTask(tid, gen); });
+                        if (!cfg.logWokenProbe) return RE::BSEventNotifyControl::kContinue;
+                        looting = true;
+                    }
+                }
+                if (!looting && g_sleepWatchCount.load(std::memory_order_relaxed) != 0 && g_sleepOn.load(std::memory_order_relaxed) && cfg.sleepWakeOnTalk &&
                     Asleep(tid)) {
                     const RE::FormID cid = a_event->actionRef->GetFormID();
                     TaskRelay::Add([tid, cid, gen] { OnSleepWakeTask(tid, cid, 0, 0, 0, SleepWakeBy::kTalk, gen); });
@@ -6573,7 +6775,9 @@ namespace SBKO::Knockout
         const bool  wantU4 = cfg.fdcRerollOnHit && g_fdcRolledFaction != nullptr;
         const char* u4Off  = !cfg.fdcRerollOnHit ? "bFdcRerollOnHit 0" : !g_fdcRolledFaction ? "FDC_SBKO_Patch.esp not loaded" : nullptr;
         if (!cfg.chanceKO) {
-            logger::info("[KO] U5 chance knock-out: OFF (bChanceKO 0) - every NPC that bleeds out is knocked out (as before u6b){}",
+            logger::info("[KO] U5 chance knock-out: OFF ({}){}",
+                         !cfg.koNormal ? "bKnockOutNormalNPCs 0 - an ordinary NPC is never knocked out"
+                                       : "bChanceKO 0 - every NPC that bleeds out is knocked out, as before u6b",
                          wantU4 ? "; the damage hook is still installed for U4" : " - no damage hook");
             if (!wantU4) {
                 LogU4(u4Off);
@@ -6599,7 +6803,7 @@ namespace SBKO::Knockout
         std::string hhdWhere;
         if (!SlotLooksSane(character.address(), slot, hhdWhere)) {
             logger::error("[KO] U5 chance knock-out: NOT installed - the Character vtable's HandleHealthDamage slot 0x{:X} failed the check ({}); "
-                          "U5 is OFF this session (every NPC that bleeds out is knocked out, as before u6b)",
+                          "U5 is OFF this session (an ordinary NPC that bleeds out is knocked out without a roll, as before u6b)",
                           slot, hhdWhere);
             LogU4(wantU4 ? "the damage hook could not be installed" : u4Off);
             return;
@@ -6904,7 +7108,10 @@ namespace SBKO::Knockout
             const auto& cw = Settings::Get();
             g_wokenTalkOn.store(cw.wokenNarration && cw.wokenOnTalk);
             g_wokenPerkOn.store(cw.wokenNarration && cw.wokenOnDomWake && g_domPerkId != 0);
-            if (wakeTalk || g_wokenTalkOn.load()) holder->AddEventSink<RE::TESActivateEvent>(&g_activateSink);
+            if (wakeTalk || g_wokenTalkOn.load() || cw.lootKnockedOut) holder->AddEventSink<RE::TESActivateEvent>(&g_activateSink);   // 2.1.0: + looting
+            if (cw.lootKnockedOut) {   // 2.1.0: SBKO's own loot menu (mode log, close on wake / death)
+                if (auto* ui = RE::UI::GetSingleton()) ui->AddEventSink<RE::MenuOpenCloseEvent>(&g_lootMenuSink);
+            }
             if (g_wokenPerkOn.load()) holder->AddEventSink<RE::TESPerkEntryRunEvent>(&g_perkSink);
             logger::info("[KO] M2 woken to talk: {} | talk to an NPC asleep in a bed {} | Diary of Mine's Wake {} (DOMInteractPerk {}) | the talk path's "
                          "SkyrimNet mode {} | probe lines {}",
@@ -6943,6 +7150,8 @@ namespace SBKO::Knockout
     {
         g_gameReady.store(false);
         ++g_generation;
+        g_lootPending.store(0);   // 2.1.0 looting: a menu asked for in the old world is not ours when it opens
+        g_lootOpen.store(0);
         {
             std::scoped_lock lk(g_u5Mtx);   // u6b (U5): a roll still queued finds no record (its generation is old anyway)
             g_u5.clear();
@@ -7209,7 +7418,7 @@ namespace SBKO::Knockout
     std::string ConsoleHelp()
     {
         static constexpr const char* kLines[] = {
-            "SimpleBleedoutKO 2.0.0 console tests. Click an NPC in the console, then type ONE of these (each prints one line in the "
+            "SimpleBleedoutKO 2.1.0 console tests. Click an NPC in the console, then type ONE of these (each prints one line in the "
             "console; the detail is in this log):",
             "  sbko status            - everything SBKO knows about her (reads only - changes nothing)",
             "  sbkos                  - the same as 'sbko status' with no word to type (the fallback if 'sbko <word>' is not understood)",
@@ -8438,6 +8647,8 @@ namespace SBKO::Knockout
             g_woken.clear();          // u7a (M2)
             g_chokeLoose.clear();     // u7a (U7) - refilled by 'CHOK' when the save has one
             g_chokeLooseCount.store(0);
+            g_lootPending.store(0);   // 2.1.0 looting: a menu of the old world is not ours to close
+            g_lootOpen.store(0);
             g_loadSafety  = false;
             g_adoptAll    = false;
             g_hasLastTick = false;

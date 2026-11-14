@@ -98,6 +98,10 @@ namespace SBKO::Helper
     bool NarrateHealWake(RE::FormID a_id, bool a_notify, bool a_narrate);
     bool SayTooInjured(RE::FormID a_id, bool a_notify);
 
+    // 2.1.0 (bLootKnockedOut): SBKO_Helper.LootInventory - her inventory opens for the player (OpenInventory(true), free looting).
+    // false = not dispatched (SBKO_Helper.pex without LootInventory, or the VM not ready)
+    bool LootInventory(RE::FormID a_id);
+
     // ---- u7a ----
     bool FdcHit(RE::FormID a_id, const std::string& a_hit, bool a_deathOnly);                        // U4
     bool NarrateWoken(RE::FormID a_id, std::int32_t a_kind, std::int32_t a_mode, bool a_notify, bool a_narrate);   // M2

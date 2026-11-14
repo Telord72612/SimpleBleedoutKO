@@ -4,12 +4,22 @@
 // (SBKO_DownWatcherScript.psc:23-32). The two SkyrimNet ranks (10 = knocked out, 3 = first coming-to rank) are the
 // prompt contract: constants in Knockout.cpp, never ini keys.
 //
-// File: Data/SKSE/Plugins/SimpleBleedoutKO.ini (shipped by the mod). Read ONCE at kDataLoaded, before the check thread
-// starts; read-only afterwards, so no lock is needed to read it.
+// Files: Data/SKSE/Plugins/SimpleBleedoutKO.ini (the advanced options), then Data/SKSE/Plugins/SBKO_Setting.ini (2.1.0: the
+// everyday options under friendlier names - see Settings.cpp kUserKeys; a value there wins). Read ONCE at kDataLoaded, before the
+// check thread starts; read-only afterwards, so no lock is needed to read it.
 namespace SBKO::Settings
 {
     struct Values
     {
+        // [WhoGetsKnockedOut] (2.1.0) - the AUTOMATIC knock-outs (dropping in a fight): who SBKO knocks out at bleedout. Switched
+        // off = that group keeps the game's own bleedout. An NPC SBKO already holds is never affected. The player's own deliberate
+        // knock-outs have their own switches (bHeadHitFollowers, bSleepFollowers, ...).
+        bool  koFollowers        = true;    // bKnockOutFollowers  - followers (player teammates / CurrentFollowerFaction)
+        bool  koProtected        = true;    // bKnockOutProtected  - other protected / essential NPCs
+        bool  koNormal           = true;    // bKnockOutNormalNPCs - ordinary NPCs (the knock-out roll); 0 = also bChanceKO 0
+        bool  lootKnockedOut     = true;    // bLootKnockedOut     - 2.1.0: the player activating, WHILE SNEAKING, an NPC SBKO holds knocked
+                                            //   out opens her inventory - free looting, never a crime (OpenInventory(true)); other mods'
+                                            //   interaction menus first; the menu closes if she wakes / dies. A standing click is unchanged
         // [Knockout]
         float wakeHealthFraction = 0.25f;   // fWakeHealthFraction - u2d: her Health at EVERY wake is raised to at least this
                                             //   fraction of max (perm + temp), never lowered (wake up at 25 % HP); an old M1
@@ -44,7 +54,8 @@ namespace SBKO::Settings
         int   combatEndRefill    = 2;       // iCombatEndRefill - u2e: the engine's FULL heal when an essential /
                                             //   protected NPC leaves combat (Actor::StopCombat) is skipped for 2 = every such NPC,
                                             //   1 = followers (player teammates) only, 0 = nobody (the engine as usual). In every mode it
-                                            //   is skipped inside SBKO's own knock-out / wake / let-go calls (RefillGuard). VR 1.4.15 only
+                                            //   is skipped inside SBKO's own knock-out / wake / let-go calls (RefillGuard). VR 1.4.15,
+                                            //   SE / AE since 2.1.0. SBKO_Setting.ini name: iBlockCombatEndHeal
         // [HeadHit] (U6 - rules R1-R8 =
         // the Knockout mod's rules + a blunt weapon to the head). The player's hit knocks an NPC out with SBKO's own knock-out. No roll,
         // no timer, no cap, no cooldown: every switch below only turns a rule on or off.
@@ -191,6 +202,7 @@ namespace SBKO::Settings
 
     [[nodiscard]] const Values& Get() noexcept;
 
-    // Parse the ini (missing file / key -> the default), log every value read and the effective set.
+    // Parse SimpleBleedoutKO.ini, then SBKO_Setting.ini (missing file / key -> the default), log every value read and the
+    // effective set with the file each value came from.
     void Load();
 }

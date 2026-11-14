@@ -1,5 +1,27 @@
 # SimpleBleedoutKO - changelog
 
+## 2.1.0
+
+**An easy settings file**
+- New `SKSE/Plugins/SBKO_Setting.ini`: the everyday options under plain names, each explained (who gets knocked out, healing, waking,
+  your hits, the Sleep spell, extras). It is read after `SimpleBleedoutKO.ini` and its values win; the moved options are commented out in
+  `SimpleBleedoutKO.ini`, which keeps the advanced ones. The log names the file each value came from and warns when the two disagree.
+
+**Choose who gets knocked out**
+- `bKnockOutFollowers`, `bKnockOutProtected`, `bKnockOutNormalNPCs`: a group switched off gets the game's own bleedout again (someone
+  already knocked out is never affected; your own bash / mace / Sleep knock-outs keep their own switches).
+- `fNormalNPCKnockOutHealthPercent`: how low an ordinary NPC's Health must be for the knock-out roll (default 15).
+
+**Loot a knocked-out NPC while sneaking**
+- Crouch and activate a knocked-out NPC: her inventory opens - free looting, never a crime. Standing up, the click works as before.
+  The inventory closes if she wakes, dies or is let go, and never opens over another menu. With MageVR Reborn's VR Backpack pickpocket
+  on, its pickpocket panel shows instead (items marked stolen). Switch: `bLootKnockedOut`.
+
+**Followers stay hurt after a fight on SE / AE too**
+- The skip of the game's full heal of essential NPCs at the end of a fight, and of the full heal when this mod wakes someone, now works on
+  Skyrim SE 1.5.97 and AE 1.6.x / 1.7.x as well as VR. Each patch finds its exact place in the game at load and installs only there; on a
+  game build it does not recognise it stays off and says so in the log.
+
 ## 2.0.0 - first public release
 
 Compared with the earlier private, Papyrus-only version (v10):

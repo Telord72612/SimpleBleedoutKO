@@ -204,12 +204,17 @@
 //   the m34d code with the SKSE author "Telord" and a plain "SimpleBleedoutKO 2.0.0" banner (the build tag "rc200 (m34d)" on the runtime
 //   line), the built-in defaults = the public ini (Settings.h), the source paths trimmed from the DLL (CMakeLists.txt). Log texts only
 //   otherwise; no behaviour change.
+// 2.1.0: (1) SBKO_Setting.ini - the everyday options under friendly names, read after SimpleBleedoutKO.ini (its values win;
+//   Settings.cpp kUserKeys), every "in effect" line names the file a value came from; (2) [WhoGetsKnockedOut] bKnockOutFollowers /
+//   bKnockOutProtected / bKnockOutNormalNPCs - which group SBKO knocks out at bleedout (a NEW knock-out only; off = the game's own
+//   bleedout; bKnockOutNormalNPCs 0 also turns the knock-out roll off); (3) RefillGuard on Skyrim SE / AE too (the combat-end and
+//   wake full heals - RefillGuard.cpp).
 // NOTE: the v10 mod's Papyrus user log is `Logs/Script/User/SimpleBleedoutKO.N.log` - a different folder from this
 // DLL's `SKSE/SimpleBleedoutKO.log`, no clash.
 
 namespace
 {
-    constexpr REL::Version kVersion{ 2, 0, 0 };
+    constexpr REL::Version kVersion{ 2, 1, 0 };
 
     // "SE 1.5.97.0" / "AE 1.6.1170.0" / "VR 1.4.15.0" - the runtime this DLL was loaded into (REL::Module).
     std::string RuntimeName()
@@ -220,8 +225,8 @@ namespace
 
     std::string Banner()
     {
-        return std::format("SimpleBleedoutKO 2.0.0 ({}, CommonLib MinLL 4.39.5 MIT) - knock-outs instead of bleedout: guarded unconscious, "
-                           "heal / timer wake, combat-end heal guard (VR), bash / mace knock-out, knock-out roll for ordinary NPCs, the Sleep "
+        return std::format("SimpleBleedoutKO 2.1.0 ({}, CommonLib MinLL 4.39.5 MIT) - knock-outs instead of bleedout: guarded unconscious, "
+                           "heal / timer wake, combat-end heal guard, bash / mace knock-out, knock-out roll for ordinary NPCs, the Sleep "
                            "spell, woken-to-talk narration, Injury Engine skin marks, SBKO_API; console 'sbko help' / 'sbkos' / 'sbkou' / 'sbkot'",
                            RuntimeName());
     }
@@ -331,7 +336,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 
     logger::info("==================================================");
     logger::info("{}", Banner());
-    logger::info("runtime {} {} - build rc200 (m34d)",REL::Module::IsVR() ? "VR" : (REL::Module::IsAE() ? "AE" : "SE"),
+    logger::info("runtime {} {} - build 2.1.0",REL::Module::IsVR() ? "VR" : (REL::Module::IsAE() ? "AE" : "SE"),
                  REL::Module::get().version().string());
     if (!kept.empty()) logger::info("{}", kept);
     logger::info("==================================================");

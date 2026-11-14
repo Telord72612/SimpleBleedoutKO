@@ -140,15 +140,158 @@ namespace SBKO::RefillGuard
             for (std::size_t i = 0; i < N; ++i) a_seen += std::format("{}{:02X}", i ? " " : "", p[i]);
             return false;
         }
+
+        // ---- 2.1.0: Skyrim SE / AE. Every site is FOUND at load inside its own function (Address Library ids) and accepted only
+        // when its call / jump goes to the heal routine itself; anything else = that patch is not installed (fail closed). Read from
+        // SkyrimSE.exe 1.5.97, 1.6.1170 and 1.7.104: the same code on all three,
+        // except that AE moved the wake refill into a small helper that SetNoBleedoutRecovery tail-jumps to.
+        constexpr std::int16_t kAny = -1;   // any byte
+        constexpr std::int16_t kRex = -2;   // a REX.W prefix: 48 or 49
+        constexpr std::int16_t kRcx = -3;   // the ModRM of `mov rcx, r64`: C8..CF (SE uses rsi, AE rdi)
+        // `and eax,0x1E00000 ; cmp eax,0xE00000 ; je +8 ; mov rcx,r ; call heal` - StopCombat's refill (not EssentialDown, then heal)
+        constexpr std::array<std::int16_t, 20> kStopPat{ 0x25, 0x00, 0x00, 0xE0, 0x01, 0x3D, 0x00, 0x00, 0xE0, 0x00,
+                                                         0x74, 0x08, kRex, 0x8B, kRcx, 0xE8, kAny, kAny, kAny, kAny };
+        constexpr std::size_t                  kStopOp = 15;   // the E8
+        // the same test, then `je +0xD ; mov rcx,r ; add rsp,0x20 ; pop rbx ; jmp heal` - the wake refill (SE: in SetNoBleedoutRecovery,
+        // AE: in its helper)
+        constexpr std::array<std::int16_t, 25> kFlagPat{ 0x25, 0x00, 0x00, 0xE0, 0x01, 0x3D, 0x00, 0x00, 0xE0, 0x00, 0x74, 0x0D, kRex,
+                                                         0x8B, kRcx, 0x48, 0x83, 0xC4, 0x20, 0x5B, 0xE9, kAny, kAny, kAny, kAny };
+        constexpr std::size_t                  kFlagOp = 20;   // the E9
+        // AE: SetNoBleedoutRecovery's `test al,al ; jne +0xD ; mov rcx,r ; add rsp,0x20 ; pop rbx ; jmp helper`
+        constexpr std::array<std::int16_t, 17> kStepPat{ 0x84, 0xC0, 0x75, 0x0D, kRex, 0x8B, kAny, 0x48, 0x83,
+                                                         0xC4, 0x20, 0x5B, 0xE9, kAny, kAny, kAny, kAny };
+        constexpr std::size_t                  kStepOp = 12;   // the E9
+        constexpr std::array<std::uint8_t, 6>  kHealHead{ 0x40, 0x53, 0x48, 0x83, 0xEC, 0x20 };   // `push rbx ; sub rsp,0x20` (SE + AE)
+
+        template <std::size_t N>
+        std::vector<std::uintptr_t> FindAll(std::uintptr_t a_from, std::size_t a_len, const std::array<std::int16_t, N>& a_pat)
+        {
+            std::vector<std::uintptr_t> hits;
+            const auto*                 p = reinterpret_cast<const std::uint8_t*>(a_from);
+            for (std::size_t i = 0; i + N <= a_len; ++i) {
+                bool ok = true;
+                for (std::size_t k = 0; k < N && ok; ++k) {
+                    const std::int16_t w = a_pat[k];
+                    const std::uint8_t b = p[i + k];
+                    ok = w == kAny ? true
+                       : w == kRex ? (b == 0x48 || b == 0x49)
+                       : w == kRcx ? (b >= 0xC8 && b <= 0xCF)
+                                   : b == static_cast<std::uint8_t>(w);
+                }
+                if (ok) hits.push_back(a_from + i);
+            }
+            return hits;
+        }
+
+        // the destination of the E8 / E9 rel32 instruction at a_op
+        std::uintptr_t Rel32Target(std::uintptr_t a_op)
+        {
+            std::int32_t rel = 0;
+            std::memcpy(&rel, reinterpret_cast<const void*>(a_op + 1), sizeof(rel));
+            return a_op + 5 + static_cast<std::intptr_t>(rel);
+        }
+
+        // The ONE match of a_pat in [a_from, a_from + a_len) whose call / jump goes to a_target -> the address of that E8 / E9;
+        // 0 = not exactly one match, or it goes elsewhere (a_why says which)
+        template <std::size_t N>
+        std::uintptr_t FindSite(std::uintptr_t a_from, std::size_t a_len, const std::array<std::int16_t, N>& a_pat, std::size_t a_op,
+                                std::uintptr_t a_target, std::uintptr_t a_base, std::string& a_why)
+        {
+            const auto hits = FindAll(a_from, a_len, a_pat);
+            if (hits.size() != 1) {
+                a_why = std::format("{} matches of its byte pattern in the function (exactly 1 expected)", hits.size());
+                return 0;
+            }
+            const std::uintptr_t op = hits[0] + a_op;
+            const std::uintptr_t to = Rel32Target(op);
+            if (to != a_target) {
+                a_why = std::format("its jump goes to +0x{:X}, not to +0x{:X} (another mod patched it?)", to - a_base, a_target - a_base);
+                return 0;
+            }
+            return op;
+        }
+
+        void InstallFlat(int a_mode)
+        {
+            const bool           ae   = REL::Module::IsAE();
+            const std::uintptr_t base = REL::Module::get().base();
+            const std::uintptr_t heal = REL::RelocationID(36350, 37340).address();   // "Health back to full" (the routine both sites call)
+            const std::uintptr_t stop = REL::RelocationID(37613, 38566).address();   // Actor::StopCombat
+            const std::uintptr_t snbr = REL::RelocationID(37583, 38533).address();   // Actor::SetNoBleedoutRecovery
+            if (std::memcmp(reinterpret_cast<const void*>(heal), kHealHead.data(), kHealHead.size()) != 0) {
+                g_installWhy = "the heal routine has other bytes than expected (an unknown game build, or another mod hooked it?)";
+                logger::warn("[refill] NOT installed: the heal routine (SkyrimSE.exe+0x{:X}) does not start with the expected bytes - an "
+                             "unknown game build, or another mod hooked it? The engine refills essential / protected NPCs as usual",
+                             heal - base);
+                return;
+            }
+            // log only: the Character vtable's StopCombat (slot 0xE5). Another mod may have replaced the slot; SBKO patches the engine's
+            // own body, which a slot replacement leaves alone.
+            const auto*          vt   = reinterpret_cast<const std::uintptr_t*>(RE::VTABLE_Character[0].address());
+            const std::uintptr_t slot = vt ? vt[0xE5] : 0;
+            if (slot != stop)
+                logger::info("[refill] note: the Character vtable's StopCombat slot points to +0x{:X}, not the engine's +0x{:X} (another mod hooks "
+                             "it) - SBKO patches the engine's body, which still runs behind that hook", slot - base, stop - base);
+
+            std::string          whyStop, whyFlag;
+            const std::uintptr_t stopSite = FindSite(stop, 0x400, kStopPat, kStopOp, heal, base, whyStop);
+            std::uintptr_t       flagSite = 0;
+            if (!ae) {
+                flagSite = FindSite(snbr, 0x80, kFlagPat, kFlagOp, heal, base, whyFlag);
+            } else {
+                const std::uintptr_t helper = REL::ID(38680).address();   // AE: the wake refill's own little function
+                std::string          whyStep;
+                if (FindSite(snbr, 0x80, kStepPat, kStepOp, helper, base, whyStep) == 0)
+                    whyFlag = std::format("SetNoBleedoutRecovery's jump to its helper: {}", whyStep);
+                else
+                    flagSite = FindSite(helper, 0x40, kFlagPat, kFlagOp, heal, base, whyFlag);
+            }
+            if (!stopSite && !flagSite) {
+                g_installWhy = "neither site was found as expected (another mod patched them, or an unknown game build)";
+                logger::warn("[refill] NOT installed: StopCombat (SkyrimSE.exe+0x{:X}): {} | SetNoBleedoutRecovery (+0x{:X}): {} - the engine "
+                             "refills essential / protected NPCs as usual", stop - base, whyStop, snbr - base, whyFlag);
+                return;
+            }
+            g_installWhy = stopSite && flagSite ? "" : !stopSite ? "the StopCombat site was not found as expected"
+                                                                 : "the SetNoBleedoutRecovery site was not found as expected";
+            SKSE::AllocTrampoline(64);   // ONE allocation for both patches (a second one could free the first under a written call)
+            auto& tramp = SKSE::GetTrampoline();
+            if (stopSite) {
+                StopCombatRefill::func = tramp.write_call<5>(stopSite, StopCombatRefill::thunk);
+                g_stopOn.store(true);
+                logger::info("[refill] combat-end patch installed: Actor::StopCombat's full heal (SkyrimSE.exe+0x{:X}, a call to the heal routine "
+                             "+0x{:X}) is skipped for {}, and for any NPC SBKO is knocking out",
+                             stopSite - base, heal - base,
+                             a_mode >= 2 ? "every essential / protected NPC (iCombatEndRefill 2; creatures keep it)"
+                             : a_mode == 1 ? "followers (teammates or CurrentFollowerFaction, iCombatEndRefill 1)"
+                                           : "nobody else (iCombatEndRefill 0: the engine refills as usual)");
+            } else {
+                logger::warn("[refill] combat-end patch NOT installed: Actor::StopCombat (SkyrimSE.exe+0x{:X}): {} - the engine refills at "
+                             "combat end as usual", stop - base, whyStop);
+            }
+            if (flagSite) {
+                FlagOffRefill::func = tramp.write_branch<5>(flagSite, FlagOffRefill::thunk);
+                g_flagOn.store(true);
+                logger::info("[refill] wake patch installed: SetNoBleedoutRecovery(false)'s full heal (SkyrimSE.exe+0x{:X}{}, a jump to the heal "
+                             "routine +0x{:X}) is skipped while SBKO's own wake / let-go / clear runs on her",
+                             flagSite - base, ae ? " in its helper" : "", heal - base);
+            } else {
+                logger::warn("[refill] wake patch NOT installed: SetNoBleedoutRecovery (SkyrimSE.exe+0x{:X}): {} - a wake out of combat refills "
+                             "her to full", snbr - base, whyFlag);
+            }
+        }
     }
 
     void Install()
     {
-        const int mode = Settings::Get().combatEndRefill;
-        if (!REL::Module::IsVR()) {
-            g_installWhy = "SE / AE: the patch is for Skyrim VR 1.4.15 only";
-            logger::info("[refill] not installed: the engine-heal patch is for Skyrim VR 1.4.15 only - the engine refills essential / "
-                         "protected NPCs as usual here");
+        const int mode    = Settings::Get().combatEndRefill;
+        g_kwNPC           = RE::TESForm::LookupByID<RE::BGSKeyword>(kActorTypeNPC);
+        g_followerFaction = RE::TESForm::LookupByID<RE::TESFaction>(kFollowerFaction);
+        if (!g_kwNPC)
+            logger::warn("[refill] keyword ActorTypeNPC (0x{:08X}) not found - iCombatEndRefill 1 / 2 cover nobody (only SBKO's own calls)",
+                         kActorTypeNPC);
+        if (!REL::Module::IsVR()) {   // 2.1.0: Skyrim SE / AE
+            InstallFlat(mode);
             return;
         }
         if (const auto ver = REL::Module::get().version(); ver != REL::Version(1, 4, 15, 0)) {
@@ -157,11 +300,6 @@ namespace SBKO::RefillGuard
                          ver.string("."));
             return;
         }
-        g_kwNPC           = RE::TESForm::LookupByID<RE::BGSKeyword>(kActorTypeNPC);
-        g_followerFaction = RE::TESForm::LookupByID<RE::TESFaction>(kFollowerFaction);
-        if (!g_kwNPC)
-            logger::warn("[refill] keyword ActorTypeNPC (0x{:08X}) not found - iCombatEndRefill 1 / 2 cover nobody (only SBKO's own calls)",
-                         kActorTypeNPC);
         const std::uintptr_t base = REL::Module::get().base();
         std::string          seenStop, seenFlag;
         const bool           okStop = BytesAre(base, kStopSigAt, kStopSig, seenStop);

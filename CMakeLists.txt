@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(SimpleBleedoutKO LANGUAGES CXX VERSION 2.0.0)
+project(SimpleBleedoutKO LANGUAGES CXX VERSION 2.1.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,7 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ---------------------------------------------------------------------------
 # SimpleBleedoutKO - the C++ SKSE plugin.
-# ONE DLL for Skyrim SE 1.5.97 / AE 1.6.x incl. 1.7.99 / VR 1.4.15, built on MinLL/CommonLibVR 4.39.5 @550cc4fb (MIT; the
+# ONE DLL for Skyrim SE 1.5.97 / AE 1.6.x / 1.7.x / VR 1.4.15, built on MinLL/CommonLibVR 4.39.5 @550cc4fb (MIT; the
 # CommonLib fork Injury Engine builds on). It is pinned as the git submodule extern/CommonLibVR:
 #     git clone --recurse-submodules https://github.com/Telord72612/SimpleBleedoutKO.git
 # (or `git submodule update --init --recursive` after a plain clone). Another CommonLib tree can be given with

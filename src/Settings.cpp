@@ -2,7 +2,7 @@
 #include "Settings.h"
 
 // The hand ini parser - shape copied from the SkyrimNetMouthBridge plugin:
-// strip ;# comments, `key = value`, case-insensitive keys, unknown keys warned, a bad value keeps the default. Sections
+// strip ;# comments, `key = value`, case-insensitive keys, unknown keys warned, a bad value keeps the earlier value. Sections
 // are tracked only so each logged line says where the key sat; a key is accepted in any section (the names are unique).
 namespace SBKO::Settings
 {
@@ -73,51 +73,26 @@ namespace SBKO::Settings
 
     const Values& Get() noexcept { return g_values; }
 
-    void Load()
+    namespace
     {
-        Values                          v;   // defaults = v10
-        std::unordered_set<std::string> readKeys;   // lower-case names of the keys the file set
-        // Relative to the game's working directory; MO2's VFS maps Data/ as usual.
-        const std::filesystem::path path{ "Data/SKSE/Plugins/SimpleBleedoutKO.ini" };
-        std::ifstream               in(path);
-        if (!in) {
-            logger::info("[ini] no {} - every value is the built-in default (the same values as the shipped ini)", path.generic_string());
-        } else {
-            logger::info("[ini] reading {}", path.generic_string());
-            std::string line;
-            std::string section = "(none)";
-            int         n       = 0;
-            while (std::getline(in, line)) {
-                if (const auto c = line.find_first_of(";#"); c != std::string::npos) line.erase(c);
-                const std::string t = Trim(line);
-                if (t.empty()) continue;
-                if (t.front() == '[') {
-                    const auto close = t.find(']');
-                    section          = close == std::string::npos ? t.substr(1) : t.substr(1, close - 1);
-                    continue;
-                }
-                const auto eq = t.find('=');
-                if (eq == std::string::npos) {
-                    logger::warn("[ini] [{}] line '{}' has no '=' - ignored", section, t);
-                    continue;
-                }
-                const std::string key = Trim(t.substr(0, eq));
-                const std::string val = Trim(t.substr(eq + 1));
-                if (key.empty()) continue;
-                if (val.empty() && _stricmp(key.c_str(), "sHelmetIgnorePlugins") == 0) {   // u6g: empty = a real value (no plugin)
-                    v.helmetIgnorePlugins.clear();
-                    ++n;
-                    readKeys.insert(Lower(key));
-                    logger::info("[ini] [{}] {} = (empty) (read) - no plugin is ignored", section, key);
-                    continue;
-                }
-                if (val.empty()) {
-                    logger::warn("[ini] [{}] {} has no value - kept the default", section, key);
-                    continue;
-                }
-                const auto is = [&](const char* k) { return _stricmp(key.c_str(), k) == 0; };
-                try {
-                    if (is("fWakeHealthFraction"))   v.wakeHealthFraction = AtLeast("fWakeHealthFraction", std::stof(val), 0.0f);
+        enum class Applied : std::uint8_t
+        {
+            kOk,         // the key is known and its value was taken
+            kUnknown,    // no such key
+            kRejected,   // a known key whose value cannot work - its own line said why; the earlier value stays
+        };
+
+        // One `key = value` onto v. The names are unique, so a key works in any section. Throws on a value that does not parse
+        // (the caller logs it and keeps the earlier value).
+        Applied ApplyKey(Values& v, const std::string& key, const std::string& val, const std::string& section)
+        {
+            const auto is = [&](const char* k) { return _stricmp(key.c_str(), k) == 0; };
+                    // 2.1.0 [WhoGetsKnockedOut]
+                    if (is("bKnockOutFollowers"))        v.koFollowers        = ParseBool(val);
+                    else if (is("bKnockOutProtected"))   v.koProtected        = ParseBool(val);
+                    else if (is("bKnockOutNormalNPCs"))  v.koNormal           = ParseBool(val);
+                    else if (is("bLootKnockedOut"))      v.lootKnockedOut     = ParseBool(val);
+                    else if (is("fWakeHealthFraction"))   v.wakeHealthFraction = AtLeast("fWakeHealthFraction", std::stof(val), 0.0f);
                     else if (is("iGraceChecks"))     v.graceChecks        = AtLeast("iGraceChecks", std::stoi(val), 0);
                     else if (is("fRecoverMinHours")) v.recoverMinHours    = AtLeast("fRecoverMinHours", std::stof(val), 0.0f);
                     else if (is("fRecoverMaxHours")) v.recoverMaxHours    = AtLeast("fRecoverMaxHours", std::stof(val), 0.0f);
@@ -129,9 +104,9 @@ namespace SBKO::Settings
                     else if (is("iCombatEndRefill")) {
                         const int m = std::stoi(val);
                         if (m < 0 || m > 2) {
-                            logger::warn("[ini] [{}] iCombatEndRefill = {} is not 0, 1 or 2 - kept the default {}", section, val,
+                            logger::warn("[ini] [{}] iCombatEndRefill = {} is not 0, 1 or 2 - kept {}", section, val,
                                          v.combatEndRefill);
-                            continue;
+                            return Applied::kRejected;
                         }
                         v.combatEndRefill = m;
                     }
@@ -200,8 +175,8 @@ namespace SBKO::Settings
                     else if (is("iWokenTalkMode")) {
                         const int m = std::stoi(val);
                         if (m < 0 || m > 1) {
-                            logger::warn("[ini] [{}] iWokenTalkMode = {} is not 0 or 1 - kept the default {}", section, val, v.wokenTalkMode);
-                            continue;
+                            logger::warn("[ini] [{}] iWokenTalkMode = {} is not 0 or 1 - kept {}", section, val, v.wokenTalkMode);
+                            return Applied::kRejected;
                         }
                         v.wokenTalkMode = m;
                     }
@@ -224,8 +199,8 @@ namespace SBKO::Settings
                     else if (is("sStageAlphas")) {
                         const auto parts = SplitList(val);
                         if (parts.size() != 3) {
-                            logger::warn("[ini] [{}] sStageAlphas = {} is not three numbers (light, medium, severe) - kept the default", section, val);
-                            continue;
+                            logger::warn("[ini] [{}] sStageAlphas = {} is not three numbers (light, medium, severe) - kept the earlier value", section, val);
+                            return Applied::kRejected;
                         }
                         float a[3] = {};
                         for (int i = 0; i < 3; ++i) a[i] = AtLeast("sStageAlphas", std::stof(parts[i]), 0.0f);
@@ -237,8 +212,8 @@ namespace SBKO::Settings
                     else if (is("sChokeSteps")) {
                         const auto parts = SplitList(val);
                         if (parts.size() != 2) {
-                            logger::warn("[ini] [{}] sChokeSteps = {} is not two numbers of seconds - kept the default", section, val);
-                            continue;
+                            logger::warn("[ini] [{}] sChokeSteps = {} is not two numbers of seconds - kept the earlier value", section, val);
+                            return Applied::kRejected;
                         }
                         const float s0 = AtLeast("sChokeSteps", std::stof(parts[0]), 0.0f);
                         const float s1 = AtLeast("sChokeSteps", std::stof(parts[1]), s0);
@@ -252,18 +227,165 @@ namespace SBKO::Settings
                     else if (is("sMarksFile"))            v.marksFile             = val;
                     else if (is("bLogMarks"))             v.logMarks              = ParseBool(val);
                     else if (is("bPerfMarks"))            v.perfMarks             = ParseBool(val);
-                    else {
-                        logger::warn("[ini] [{}] unknown key '{}' ignored", section, key);
+                    else
+                        return Applied::kUnknown;
+            return Applied::kOk;
+        }
+
+        // 2.1.0: SBKO_Setting.ini - the everyday options under friendly names. Each maps onto the key SimpleBleedoutKO.ini uses;
+        // a percent key is divided by 100 in double (15 -> "0.15", which reads back as exactly the built-in 0.15f). Every canonical key and the new [WhoGetsKnockedOut] keys work there too.
+        struct UserKey
+        {
+            const char* name;
+            const char* canonical;
+            double      divisor;   // 100 = a percent key (15 -> 0.15), 1 = taken as written
+        };
+        constexpr UserKey kUserKeys[] = {
+            { "fNormalNPCKnockOutHealthPercent", "fChanceKOHealthBelow", 100.0 },
+            { "fRegenRate", "fEssentialNonCombatHealRateBonus", 1.0 },
+            { "iBlockCombatEndHeal", "iCombatEndRefill", 1.0 },
+            { "bHealWakes", "bHealWake", 1.0 },
+            { "fWakeHealthPercent", "fWakeHealthFraction", 100.0 },
+            { "fWakeAfterHoursMin", "fRecoverMinHours", 1.0 },
+            { "fWakeAfterHoursMax", "fRecoverMaxHours", 1.0 },
+            { "bNotifications", "bNotify", 1.0 },
+            { "bHitKnockOut", "bHeadHit", 1.0 },
+            { "bBashKnockOut", "bHeadHitBash", 1.0 },
+            { "bBluntKnockOut", "bHeadHitBlunt", 1.0 },
+            { "bSneakKnockOut", "bHeadHitSneak", 1.0 },
+            { "bLowHealthKnockOut", "bHeadHitLowHealth", 1.0 },
+            { "fLowHealthKnockOutPercent", "fHeadHitHealthThreshold", 100.0 },
+            { "bHelmetProtects", "bHeadHitHelmetProtects", 1.0 },
+            { "bHitKnockOutFollowers", "bHeadHitFollowers", 1.0 },
+            { "bSleepSpell", "bSleep", 1.0 },
+            { "bSleepSpellFollowers", "bSleepFollowers", 1.0 },
+            { "bSkinMarks", "bMarks", 1.0 },
+            { "bSkinMarksOnPlayer", "bMarkPlayer", 1.0 },
+            { "bWokenToTalk", "bWokenNarration", 1.0 },
+        };
+
+        struct Source
+        {
+            std::string file;    // the file that set the key last
+            std::string value;   // the value it set (after a percent conversion)
+        };
+        using ReadFrom = std::unordered_map<std::string, Source>;   // lower-case canonical key -> where its value came from
+
+        // two ini values mean the same: both numbers and equal (6 = 6.0), else the same comma list (case-insensitive, spaces ignored)
+        bool SameValue(const std::string& a_x, const std::string& a_y)
+        {
+            try {
+                std::size_t  ix = 0, iy = 0;
+                const double dx = std::stod(a_x, &ix);
+                const double dy = std::stod(a_y, &iy);
+                if (ix == a_x.size() && iy == a_y.size()) return std::fabs(dx - dy) <= 1e-6 * (std::max)(1.0, std::fabs(dx));
+            } catch (...) {
+            }
+            return Lower(JoinList(SplitList(a_x))) == Lower(JoinList(SplitList(a_y)));
+        }
+
+        // One ini file onto v (a later file's value replaces an earlier one). Missing file = nothing read.
+        void ReadFile(const std::filesystem::path& a_path, bool a_userFile, Values& v, ReadFrom& a_readFrom)
+        {
+            const std::string file = a_path.filename().string();
+            std::ifstream     in(a_path);
+            if (!in) {
+                logger::info("[ini] no {} - nothing read from it", a_path.generic_string());
+                return;
+            }
+            logger::info("[ini] reading {}", a_path.generic_string());
+            std::string line;
+            std::string section = "(none)";
+            int         n       = 0;
+            while (std::getline(in, line)) {
+                if (const auto c = line.find_first_of(";#"); c != std::string::npos) line.erase(c);
+                const std::string t = Trim(line);
+                if (t.empty()) continue;
+                if (t.front() == '[') {
+                    const auto close = t.find(']');
+                    section          = close == std::string::npos ? t.substr(1) : t.substr(1, close - 1);
+                    continue;
+                }
+                const auto eq = t.find('=');
+                if (eq == std::string::npos) {
+                    logger::warn("[ini] {} [{}] line '{}' has no '=' - ignored", file, section, t);
+                    continue;
+                }
+                const std::string shown = Trim(t.substr(0, eq));
+                const std::string val   = Trim(t.substr(eq + 1));
+                if (shown.empty()) continue;
+                std::string key   = shown;
+                double      divisor = 1.0;
+                if (a_userFile) {
+                    for (const auto& u : kUserKeys) {
+                        if (_stricmp(shown.c_str(), u.name) == 0) {
+                            key   = u.canonical;
+                            divisor = u.divisor;
+                            break;
+                        }
+                    }
+                }
+                // 2.1.0 (an upgrade from 2.0.0): the everyday file REPLACING a different value an older SimpleBleedoutKO.ini set is said once
+                auto noteReplace = [&](const std::string& a_use) {
+                    if (!a_userFile) return;
+                    const auto it = a_readFrom.find(Lower(key));
+                    if (it != a_readFrom.end() && it->second.file != file && !SameValue(it->second.value, a_use))
+                        logger::warn("[ini] {} [{}] {} = {} replaces {}'s {} = {} - the everyday options live in {} now (its values win)",
+                                     file, section, shown, a_use, it->second.file, key, it->second.value, file);
+                };
+                if (val.empty() && _stricmp(key.c_str(), "sHelmetIgnorePlugins") == 0) {   // u6g: empty = a real value (no plugin)
+                    v.helmetIgnorePlugins.clear();
+                    ++n;
+                    noteReplace("");
+                    a_readFrom[Lower(key)] = Source{ file, "" };
+                    logger::info("[ini] {} [{}] {} = (empty) (read) - no plugin is ignored", file, section, shown);
+                    continue;
+                }
+                if (val.empty()) {
+                    logger::warn("[ini] {} [{}] {} has no value - kept the earlier value", file, section, shown);
+                    continue;
+                }
+                try {
+                    std::string use = val;
+                    if (divisor != 1.0) {
+                        const double d = std::stod(val);
+                        if (d > 0.0 && d < 1.0)
+                            logger::warn("[ini] {} [{}] {} = {} looks like a fraction - this key is a PERCENT (25 = 25 %); it is taken as {} %",
+                                         file, section, shown, val, val);
+                        use = std::format("{}", d / divisor);
+                    }
+                    const Applied r = ApplyKey(v, key, use, section);
+                    if (r == Applied::kUnknown) {
+                        logger::warn("[ini] {} [{}] unknown key '{}' ignored", file, section, shown);
                         continue;
                     }
+                    if (r == Applied::kRejected) continue;
                     ++n;
-                    readKeys.insert(Lower(key));
-                    logger::info("[ini] [{}] {} = {} (read)", section, key, val);
+                    noteReplace(use);
+                    a_readFrom[Lower(key)] = Source{ file, use };
+                    if (_stricmp(shown.c_str(), key.c_str()) != 0)
+                        logger::info("[ini] {} [{}] {} = {} (read) = {} {}", file, section, shown, val, key, use);
+                    else
+                        logger::info("[ini] {} [{}] {} = {} (read)", file, section, key, val);
                 } catch (...) {
-                    logger::warn("[ini] [{}] bad value for '{}': '{}' - kept the default", section, key, val);
+                    logger::warn("[ini] {} [{}] bad value for '{}': '{}' - kept the earlier value", file, section, shown, val);
                 }
             }
-            logger::info("[ini] {} value(s) read; every key not read keeps its default", n);
+            logger::info("[ini] {}: {} value(s) read", file, n);
+        }
+    }
+
+    void Load()
+    {
+        Values   v;   // the built-in defaults
+        ReadFrom readFrom;
+        // Relative to the game's working directory; MO2's VFS maps Data/ as usual. The everyday file last: its values win.
+        ReadFile("Data/SKSE/Plugins/SimpleBleedoutKO.ini", false, v, readFrom);
+        ReadFile("Data/SKSE/Plugins/SBKO_Setting.ini", true, v, readFrom);
+        if (!v.koNormal && v.chanceKO) {
+            v.chanceKO = false;
+            logger::info("[ini] bKnockOutNormalNPCs 0 -> bChanceKO 0 as well: an ordinary NPC is never knocked out (no roll, and her "
+                         "bleedout does not knock her out either)");
         }
         if (v.recoverMaxHours < v.recoverMinHours)
             logger::warn("[ini] fRecoverMaxHours {} is below fRecoverMinHours {} - the timer will always be {} game hours "
@@ -295,8 +417,17 @@ namespace SBKO::Settings
             }
         }
 
-        g_values         = v;
-        const auto from  = [&](const char* k) { return readKeys.contains(Lower(k)) ? "from the ini" : "default"; };
+        g_values        = v;
+        const auto from = [&](const char* k) {
+            const auto it = readFrom.find(Lower(k));
+            return it != readFrom.end() ? std::format("from {}", it->second.file) : std::string("default");
+        };
+        logger::info("[ini] in effect: [WhoGetsKnockedOut] bKnockOutFollowers = {} ({}) | bKnockOutProtected = {} ({}) | "
+                     "bKnockOutNormalNPCs = {} ({}) - a group switched off keeps the game's own bleedout",
+                     v.koFollowers ? 1 : 0, from("bKnockOutFollowers"), v.koProtected ? 1 : 0, from("bKnockOutProtected"),
+                     v.koNormal ? 1 : 0, from("bKnockOutNormalNPCs"));
+        logger::info("[ini] in effect: [Extras] bLootKnockedOut = {} ({}){}", v.lootKnockedOut ? 1 : 0, from("bLootKnockedOut"),
+                     v.lootKnockedOut ? " - activating a knocked-out NPC WHILE SNEAKING opens her inventory (free looting, never a crime)" : "");
         logger::info("[ini] in effect: [Knockout] fWakeHealthFraction = {} ({})", v.wakeHealthFraction, from("fWakeHealthFraction"));
         logger::info("[ini] in effect: [Knockout] iGraceChecks = {} ({})", v.graceChecks, from("iGraceChecks"));
         logger::info("[ini] in effect: [Knockout] fRecoverMinHours = {} ({})", v.recoverMinHours, from("fRecoverMinHours"));
@@ -340,8 +471,11 @@ namespace SBKO::Settings
         logger::info("[ini] in effect: [HeadHit] bHeadHitFollowers = {} ({})", v.headHitFollowers ? 1 : 0, from("bHeadHitFollowers"));
         logger::info("[ini] in effect: [HeadHit] bLogHeadHits = {} ({})", v.logHeadHits ? 1 : 0, from("bLogHeadHits"));
         // u6b (U5)
-        logger::info("[ini] in effect: [ChanceKO] bChanceKO = {} ({}){}", v.chanceKO ? 1 : 0, from("bChanceKO"),
-                     v.chanceKO ? "" : " - no damage hook; every NPC that bleeds out is knocked out (as before u6b)");
+        logger::info("[ini] in effect: [ChanceKO] bChanceKO = {} ({}){}", v.chanceKO ? 1 : 0,
+                     !v.koNormal ? std::string("forced off by bKnockOutNormalNPCs 0") : from("bChanceKO"),
+                     v.chanceKO   ? ""
+                     : !v.koNormal ? " - an ordinary NPC is never knocked out (no roll, no bleedout knock-out)"
+                                   : " - no damage hook; every NPC that bleeds out is knocked out (as before u6b)");
         logger::info("[ini] in effect: [ChanceKO] fChanceKOHealthBelow = {} ({})", v.chanceKOHealthBelow, from("fChanceKOHealthBelow"));
         logger::info("[ini] in effect: [ChanceKO] bChanceKOCreatureHits = {} ({})", v.chanceKOCreatureHits ? 1 : 0,
                      from("bChanceKOCreatureHits"));

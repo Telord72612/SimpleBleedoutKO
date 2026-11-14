@@ -1,4 +1,4 @@
-# SimpleBleedoutKO 2.0.0
+# SimpleBleedoutKO 2.1.0
 
 **Knock-outs instead of endless bleedout.** When a follower, a quest NPC or any other protected / essential character drops, they are
 **knocked out cold** - ragdolled, unconscious, not regenerating - and they stay down until **you heal them** or a few game hours pass.
@@ -6,8 +6,11 @@ Ordinary NPCs can be knocked out too: by a lucky hit when they are badly hurt, b
 With SkyrimNet, everyone knows what happened: the unconscious NPC only breathes and groans, onlookers see them lying there, and they come
 round dazed and confused.
 
-One SKSE plugin for **Skyrim SE, AE and VR**. **Tested in Skyrim VR 1.4.15. Built for SE / AE but not tested there yet** - please report
-how it goes and attach `SimpleBleedoutKO.log`.
+One SKSE plugin for **Skyrim SE, AE and VR**. **Tested in Skyrim VR 1.4.15.** On SE / AE it is checked against the game files
+(SE 1.5.97, AE 1.6.1170 and 1.7.104) but **not yet run in game** - please report how it goes and attach `SimpleBleedoutKO.log`.
+
+**New in 2.1.0:** an easy settings file (`SBKO_Setting.ini`), switches for who gets knocked out, looting a knocked-out NPC while
+sneaking, and followers stay hurt after a fight on SE / AE too. Details in `CHANGELOG.md`.
 
 ---
 
@@ -18,6 +21,8 @@ how it goes and attach `SimpleBleedoutKO.log`.
   ragdolled, unconscious, and their Health is **held low** - no natural regeneration, no drinking potions, no getting up on their own.
 - Another mod that tries to "wake" them gets *"<name> is too injured to wake up."* - they need healing.
 - You (the player) are never knocked out.
+- **You choose who:** followers, other protected / essential NPCs and ordinary NPCs each have an on / off switch (`[WhoGetsKnockedOut]`
+  in `SBKO_Setting.ini`). A group switched off gets the game's own kneeling bleedout again.
 
 ### They wake when you heal them - or after a few hours
 - **Any real heal wakes them** straight away: a healing spell, a staff, a scroll, a potion they receive - from you or anyone else. They get
@@ -26,8 +31,8 @@ how it goes and attach `SimpleBleedoutKO.log`.
 - Waking is not instant clarity: they are **groggy for about three minutes** (three stages), and with SkyrimNet they behave like it.
 
 ### Ordinary NPCs: a knock-out roll when they are badly hurt
-Bandits, soldiers, mages, townsfolk... a hit that leaves them alive at **15 % Health or less** rolls for a knock-out. Who landed the hit
-does not matter (you, a follower, another NPC, a wolf). The chance is the sum of:
+Bandits, soldiers, mages, townsfolk... a hit that leaves them alive at **15 % Health or less** (`fNormalNPCKnockOutHealthPercent`) rolls
+for a knock-out. Who landed the hit does not matter (you, a follower, another NPC, a wolf). The chance is the sum of:
 
 | What they wear / the hit | Points |
 |---|---|
@@ -39,16 +44,16 @@ does not matter (you, a follower, another NPC, a wolf). The chance is the sum of
 | Hit size: a hit as big as their whole Health | up to 10 |
 
 So a robed mage hit hard by a stronger foe can go down often (up to 90 %), a fighter in full plate almost never. Lose the roll and the game
-decides as usual (they may kneel, flee or fight on). Punches, burning / poison ticks, cloaks, traps and falls never roll. Every number is in
-the ini.
+decides as usual (they may kneel, flee or fight on). Punches, burning / poison ticks, cloaks, traps and falls never roll. Every number of
+the formula is in `SimpleBleedoutKO.ini`.
 
 ### Your bash or your mace can knock someone out
 - A **shield or weapon bash** (anywhere), or a **mace / warhammer** hit - **to the head** in Skyrim VR with PLANCK, anywhere without it -
   knocks an NPC out **for certain** when it is a **sneak attack**, when they **do not see you**, or when they are at **10 % Health or less**.
 - A real **helmet** (light or heavy armour on the head) protects them. Hoods, circlets, capes and wigs do not count (wig mods are listed in
-  the ini - add your own).
+  `SBKO_Setting.ini` - add your own).
 - Bare-handed punches never knock anyone out. Brawls and the Companions' fist-fight are never affected. Your followers can be knocked out
-  by you too (switch in the ini).
+  by you too (a switch in `SBKO_Setting.ini`).
 
 ### The Sleep spell
 - **Sleep** (Illusion, Apprentice): touch a person and cast it - they fall into a deep magical sleep. No roll, no crime.
@@ -56,6 +61,15 @@ the ini.
   `help sleep`, then `player.additem <id> 1`).
 - A sleeper wakes on **any hit**, when you **talk to them**, with Diary of Mine's **Wake**, by a heal, or after 6-12 game hours.
 - With SkyrimNet: if they **saw** your glowing hand, they half-remember it and wonder whether it was a dream; if not, they just wake confused.
+
+### Loot a knocked-out NPC (while sneaking)
+- **Crouch and activate** a knocked-out NPC: her inventory opens and you take what you want - free looting, never a crime, seen or not.
+  With Diary of Mine its choice box comes first: pick **Activate**.
+- Standing up, the click works as before (talking, Diary of Mine's Wake / Tie-up).
+- The inventory closes by itself if she wakes up, dies or is let go, and it never opens over another menu. Switch: `bLootKnockedOut`.
+- **MageVR Reborn (VR Backpack):** with its pickpocket switched on, VR Backpack shows its own pickpocket panel instead. It always works and
+  raises no alarm, but the items you take are marked **stolen**. For this mod's free looting, set its pickpocket to off, or to "only with
+  the backpack drawn" and keep the backpack away.
 
 ### Skin marks from Injury Engine
 With **Injury Engine**, **RaceMenu** and **Battle Wounds** installed, everyone Injury Engine wounds (you included) gets the matching mark
@@ -81,6 +95,7 @@ A SkyrimNet prompt pack (`telord.simplebleedoutko`) tells the AI:
   built in and waits for a VRTouchEvents update.
 - **PLANCK** (VR) - the head-only mace rule.
 - **Devious Devices** - its items never count as armour or a helmet.
+- **MageVR Reborn** (VR) - see the looting note above.
 
 ---
 
@@ -106,33 +121,39 @@ A SkyrimNet prompt pack (`telord.simplebleedoutko`) tells the AI:
 1. Install with your mod manager (MO2 / Vortex) - a plain zip, no installer.
 2. **For face marks:** open RaceMenu's `SKSE/Plugins/skee64.ini` (SE / AE) or `skeevr.ini` (VR) and set `[Overlays/Face]
    iNumOverlays=13` or more (the stock value is 3; body, hand and feet marks work with the stock counts).
-3. Optional: tune `SKSE/Plugins/SimpleBleedoutKO.ini` (every setting is explained inside; restart the game after an edit).
+3. Optional: tune `SKSE/Plugins/SBKO_Setting.ini` - the everyday options, each explained. The advanced ones (the roll formula, skin-mark
+   slots, logging, ...) are in `SKSE/Plugins/SimpleBleedoutKO.ini`. Restart the game after an edit.
 4. It can be added to an existing save.
+
+**Updating from 2.0.0:** let the mod manager replace the files. The everyday options moved from `SimpleBleedoutKO.ini` to
+`SBKO_Setting.ini` (read after it - its values win); if you had changed one of them, set it again in `SBKO_Setting.ini`. The log names
+the file each value came from and warns when the two files disagree.
 
 **Uninstall:** heal (or `sbkot`) every knocked-out NPC first so they are up, save, then remove the mod. Never rename
 `SimpleBleedoutKO_001.esp`.
 
 ## Settings worth knowing
 - **Game-wide regeneration:** the mod lowers the game's own out-of-combat regeneration for *every* essential / protected NPC
-  (`fEssentialNonCombatHealRateBonus`, game default 5.0, this mod 0.1) so followers stay hurt after a fight. 0.01 = no healing without
-  potions or magic; -1 = leave the game's value alone.
-- **Skyrim VR only:** the game's full heal of essential NPCs at the end of every fight is skipped (`iCombatEndRefill`: 2 everyone
-  protected, 1 followers only, 0 off). On SE / AE this setting does nothing.
-- **Diary of Mine users:** set `bSleepWakeOnTalk=0`, or talking to a sleeper wakes them before you can choose Tie-up or Bag.
+  (`fRegenRate`, game default 5.0, this mod 0.1) so followers stay hurt after a fight. 0.01 = no healing without potions or magic;
+  -1 = leave the game's value alone.
+- **The heal at the end of a fight:** the game's full heal of essential NPCs at the end of every fight is skipped (`iBlockCombatEndHeal`:
+  2 everyone protected, 1 followers only, 0 off) - in Skyrim VR, and since 2.1.0 on SE / AE too. On a game build it does not recognise,
+  this guard switches itself off and says so in the log.
+- **Diary of Mine users:** set `bSleepWakeOnTalk = 0`, or talking to a sleeper wakes them before you can choose Tie-up or Bag.
 - The log: `Documents/My Games/<game>/SKSE/SimpleBleedoutKO.log` - attach it to any bug report.
 
 ## Compatibility
-- **Follower Death and Injury Chance:** this mod knocks a downed follower out at once (`fBleedoutGraceSeconds=0`), which may come before
-  Follower Death and Injury Chance makes its death roll. If you use it, try `fBleedoutGraceSeconds=1.5` so its roll happens first
-  (**not verified** - please report). The `[FDC]` section of the ini needs a separate patch that is **not** part of this mod; without it
-  that section does nothing.
+- **Follower Death and Injury Chance:** this mod knocks a downed follower out at once (`fBleedoutGraceSeconds=0` in
+  `SimpleBleedoutKO.ini`), which may come before Follower Death and Injury Chance makes its death roll. If you use it, try
+  `fBleedoutGraceSeconds=1.5` so its roll happens first (**not verified** - please report). The `[FDC]` section of `SimpleBleedoutKO.ini`
+  needs a separate patch that is **not** part of this mod; without it that section does nothing.
 - **Other bleedout / knock-out managers** (bleedout revamps, a follower framework's bleedout recovery, NPC-revive mods): only one mod should
   own the knock-out. Turn their bleedout handling off.
 - **Overlay mods** (SlaveTats, other RaceMenu overlay users): the marks only use the slots listed in the ini (face 10-12, body 3-5, hands 2,
   feet 2) and skip any slot another mod holds.
 - One light plugin (ESL-flagged), no vanilla record edited.
-- **Skyrim SE / AE:** built for them (one DLL), not tested yet. The VR-only parts (the combat-end heal guard, PLANCK's head-only rule) switch
-  themselves off there and say so in the log.
+- **Skyrim SE / AE:** one DLL for all, checked against the game files, not run in game yet. Only PLANCK's head-only rule is VR-only; it
+  switches itself off there and says so in the log.
 
 ## FAQ
 - **My follower won't get up.** Heal them - any healing spell, staff, scroll or potion - or wait 6-12 game hours.
@@ -141,6 +162,8 @@ A SkyrimNet prompt pack (`telord.simplebleedoutko`) tells the AI:
 - **Body marks but no face marks.** Raise RaceMenu's face overlay count (Installation, step 2).
 - **My punches never knock anyone out.** By design: a bash, a mace / warhammer, the chance roll or the Sleep spell.
 - **I hit a sleeping NPC and they woke.** That is the Sleep spell: it is only sleep.
+- **I crouched, activated a knocked-out NPC and got a "Cancel / Activate" box.** That is Diary of Mine: pick Activate.
+- **The loot showed a pickpocket panel and my items are stolen.** That is MageVR Reborn's VR Backpack (see the looting note).
 
 ## Console (select the NPC first)
 `sbko help` lists everything. Useful ones: `sbko status` (what the mod knows about this NPC; `sbkos` does the same), `sbkot` (end this
@@ -157,11 +180,11 @@ still load without this mod. The knock-out state is also readable as the rank of
 
 ## Building from source
 This repository holds the full source: the C++ SKSE plugin (`src/`, `CMakeLists.txt`) and the mod's own files laid out as they
-install into the game's `Data/` folder (`Data/`: the plugin `SimpleBleedoutKO_001.esp`, the Papyrus sources, the ini, `marks.json`,
+install into the game's `Data/` folder (`Data/`: the plugin `SimpleBleedoutKO_001.esp`, the Papyrus sources, the two ini files, `marks.json`,
 the SkyPatcher and SkyrimNet files). The compiled files (`SimpleBleedoutKO.dll`, the `.pex` scripts) and the four band textures are
 in the release zip - to play, install the zip from the Releases page.
 
-**The DLL** (one DLL for SE 1.5.97, AE 1.6.x incl. 1.7.99 and VR 1.4.15):
+**The DLL** (one DLL for SE 1.5.97, AE 1.6.x / 1.7.x and VR 1.4.15):
 - Visual Studio 2026 with the C++ workload (MSVC, C++23; its bundled vcpkg provides spdlog, nlohmann-json and the other ports in
   `vcpkg.json`), CMake 3.21 or later.
 - `git clone --recurse-submodules https://github.com/Telord72612/SimpleBleedoutKO.git` - CommonLib comes as the submodule

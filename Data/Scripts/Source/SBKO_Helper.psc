@@ -1,5 +1,5 @@
 Scriptname SBKO_Helper Hidden
-{SimpleBleedoutKO 2.0.0 - the Papyrus "hands" of the SKSE plugin (SimpleBleedoutKO.dll = the brain).
+{SimpleBleedoutKO 2.1.0 - the Papyrus "hands" of the SKSE plugin (SimpleBleedoutKO.dll = the brain).
  The DLL watches bleedout and hits, keeps the timers and the state, and calls these globals with an Int FormID.
  No Utility.Wait anywhere: a wait inside the knock-out would let other scripts interleave with it.
  State = the RANK of SBKO_StateFaction (0x803): 10 knocked out, then 3 -> 2 -> 1 -> 0 while she comes to. Always a rank change,
@@ -406,6 +406,19 @@ Function SayTooInjured(Int aiFormId, Int aiNotify) Global
 		sName = akNpc.GetBaseObject().GetName()
 	EndIf
 	Debug.Notification(sName + " is too injured to wake up.")
+EndFunction
+
+; 2.1.0 (bLootKnockedOut): the player activated an NPC SBKO holds knocked out - her inventory opens (forced, as for a teammate:
+; free looting, nothing taken counts as stolen). A living, paralysed NPC has no loot or pickpocket action of its own.
+Function LootInventory(Int aiFormId) Global
+	Actor akNpc = Game.GetFormEx(aiFormId) as Actor
+	If akNpc == None
+		Return
+	EndIf
+	If akNpc.IsDead()
+		Return
+	EndIf
+	akNpc.OpenInventory(True)
 EndFunction
 
 ; SBKO's mark ends without a wake - at a DEATH while held (rank 0), or a STALE mark (rank 10 on a conscious NPC SBKO has no record

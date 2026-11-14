@@ -235,6 +235,11 @@ namespace SBKO::Helper
                                        RE::MakeFunctionArguments(AsInt(a_id), static_cast<std::int32_t>(a_notify ? 1 : 0)), kWhat);
     }
 
+    bool LootInventory(RE::FormID a_id)
+    {
+        return VmCall::StaticIfPresent(kScript, "LootInventory", RE::MakeFunctionArguments(AsInt(a_id)), kWhat);
+    }
+
     // ---- u7a ------------------------------------------------------------------------------------------------------------------
 
     // U4: no reply - the roll is FDC's (its own Papyrus thread, its own Trace lines)

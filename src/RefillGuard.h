@@ -10,7 +10,10 @@
 //   * Actor::SetNoBleedoutRecovery(false) (+0x62C950) tail-jumps to the same routine at +0x62C9B9 (flag was on, out of combat, Essential /
 //     Protected, not EssentialDown) - so SBKO's own WakeUp / FinishWake / LetGo / ClearMark refilled her to full before WakeHealth ran.
 //
-// Two patches, VR 1.4.15 only, each installed only when its bytes are exactly the expected ones (fail closed: log, change nothing):
+// Two patches, each installed only when its site is exactly the expected one (fail closed: log, change nothing). VR 1.4.15: fixed
+// offsets + byte signatures. 2.1.0, SE 1.5.97 / AE 1.6.x / 1.7.x: each site FOUND at load inside its own function (Address Library ids
+// SE / AE: StopCombat 37613 / 38566, SetNoBleedoutRecovery 37583 / 38533, AE's wake helper 38680, the heal routine 36350 / 37340) by a
+// byte pattern that must match once and call / jump to the heal routine (RefillGuard.cpp InstallFlat):
 //   1. write_call at +0x62E96D: skipped for every essential / protected NPC (iCombatEndRefill 2), for followers only (1), or
 //      for nobody (0) - NPCs only (ActorTypeNPC, SBKO's scope; creatures keep it) - and in every mode for an NPC on whom SBKO's own
 //      knock-out / hold call is running.
